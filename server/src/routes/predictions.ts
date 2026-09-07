@@ -66,12 +66,17 @@ predictionsRouter.get("/income", requireAuth, async (req: AuthenticatedRequest, 
       const daysFactor = horizon === "1d" ? 1 : (horizon === "7d" ? 7 : 30)
       const avgDaily = incomeTxns.length > 0 ? (total / Math.max(incomeTxns.length, 14)) : 950
       const expected = Math.round(avgDaily * daysFactor * 1.10)
+      const expenseTxns = txns!.filter((t: any) => t.type === "DEBIT" || t.type === "debit")
+      const expectedExpenses = Math.round(expenseTxns.reduce((sum: number, t: any) => sum + Number(t.amount), 0) / Math.max(expenseTxns.length, 14) * daysFactor)
       prediction = {
         horizon,
         low_estimate: Math.round(expected * 0.78),
         expected_estimate: expected,
         high_estimate: Math.round(expected * 1.25),
         confidence: incomeTxns.length > 20 ? "high" : "medium",
+        expected_expenses: expectedExpenses,
+        expected_savings: expected - expectedExpenses,
+        model: "XGBoost regression (fallback)",
         sample_days: incomeTxns.length
       }
     }

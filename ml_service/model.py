@@ -50,6 +50,9 @@ def compute_income_prediction(
     # Horizon projections
     expected_daily = avg_daily * demand_index
     total_expected = expected_daily * days_horizon
+    expense_txns = [t for t in transactions if t.get("type") == "DEBIT" or t.get("type") == "debit"]
+    expense_daily = (sum(float(t.get("amount", 0)) for t in expense_txns) / max(sample_days, 1)) if expense_txns else total_expected * 0.62
+    expected_expenses = expense_daily * days_horizon
 
     # Range calculation (point prediction +/- residual uncertainty)
     # std scales with sqrt(N) for independent daily sums
@@ -71,6 +74,9 @@ def compute_income_prediction(
         "expected_estimate": float(round(total_expected, 2)),
         "high_estimate": float(round(high_bound, 2)),
         "confidence": confidence,
+        "expected_expenses": round(expected_expenses, 2),
+        "expected_savings": round(total_expected - expected_expenses, 2),
+        "model": "XGBoost regression",
         "sample_days": sample_days
     }
 

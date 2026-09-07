@@ -39,6 +39,10 @@ export interface IncomePrediction {
   expected_estimate: number
   high_estimate: number
   confidence: "low" | "medium" | "high"
+  expected_expenses?: number
+  expected_savings?: number
+  model?: string
+  sample_days?: number
   cached?: boolean
 }
 
