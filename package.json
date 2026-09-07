@@ -49,6 +49,7 @@
     "expo-asset": "latest",
     "expo-file-system": "latest",
     "expo-gl": "latest",
+    "framer-motion": "^13.2.0",
     "geist": "1.7.0",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
