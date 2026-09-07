@@ -74,9 +74,8 @@ export class SetuAAService implements AccountAggregatorService {
     const headers = await this.getHeaders()
 
     const payload = {
-      ver: "2.1.0",
       consentDuration: { unit: "MONTH", value: 12 },
-      vua: params.vpa || `${params.phoneNumber}@setu`,
+      vua: params.vpa || params.phoneNumber,
       consentTypes: ["TRANSACTIONS", "PROFILE", "SUMMARY"],
       fiTypes: ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"],
       dataRange: {
@@ -84,10 +83,16 @@ export class SetuAAService implements AccountAggregatorService {
         to: new Date().toISOString()
       },
       dataLife: { unit: "MONTH", value: 12 },
-      frequency: { unit: "DAILY", value: 1 },
-      dataFilter: [{ type: "TRANSACTION", operator: "GREATER_THAN", value: "0" }],
+      frequency: { unit: "DAY", value: 1 },
+      dataFilter: [{ type: "TRANSACTIONAMOUNT", operator: ">=", value: "0" }],
       consentMode: "STORE",
-      fetchType: "PERIODIC"
+      fetchType: "PERIODIC",
+      purpose: {
+        code: "101",
+        text: "Personal Finance Management",
+        refUri: "https://api.rebit.org.in/aa/purpose/101.xml",
+        category: { type: "string" }
+      }
     }
 
     try {
