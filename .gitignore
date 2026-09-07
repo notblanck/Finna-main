@@ -1,14 +1,18 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
+node_modules/
 /node_modules
+server/node_modules/
 
 # next.js
 /.next/
 /out/
 
-# production
+# production & build
 /build
+dist/
+server/dist/
 
 # debug
 npm-debug.log*
@@ -16,8 +20,18 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
-.env*
+# env files (exclude secrets, keep .env.example)
+.env
+.env*.local
+server/.env
+*.env
+!*.env.example
+
+# python
+__pycache__/
+*.py[cod]
+ml_service/__pycache__/
+synthetic_transactions.json
 
 # vercel
 .vercel
