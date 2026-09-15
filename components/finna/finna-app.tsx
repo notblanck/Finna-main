@@ -16,7 +16,9 @@ import {
   WalletCards,
   AlertCircle,
   Loader2,
-  RefreshCw
+  RefreshCw,
+  Building2,
+  Smartphone
 } from "lucide-react"
 import { useConsent } from "./consent-provider"
 import { PredictiveInsights } from "./predictive-insights"
@@ -143,7 +145,7 @@ function ConsentPage() {
 }
 
 function AuthorizePage() {
-  const { consent, approveConsent, updateConsent } = useConsent()
+  const { consent, updateConsent } = useConsent()
   const [isLoading, setIsLoading] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -168,9 +170,8 @@ function AuthorizePage() {
         return
       }
 
-      // In mock mode or if no external URL, proceed with existing in-app simulation
-      approveConsent()
-      window.history.pushState({}, "", "/mock-aa/retrieving")
+      // The branch preview uses a visual-only AA sandbox handoff when no live URL is configured.
+      window.history.pushState({}, "", "/mock-aa/setu-sandbox")
       window.dispatchEvent(new PopStateEvent("popstate"))
     } catch (err: any) {
       console.warn("Consent creation API fallback/notice:", err)
@@ -179,9 +180,8 @@ function AuthorizePage() {
         setErrorMessage(err.message.replace(/^API error \d+: /, "") || "Unable to reach Setu Account Aggregator. Please try again.")
         setIsLoading(false)
       } else {
-        // Safe offline fallback for local mock testing
-        approveConsent()
-        window.history.pushState({}, "", "/mock-aa/retrieving")
+        // The public preview must never imply that fabricated data came from a bank.
+        window.history.pushState({}, "", "/mock-aa/setu-sandbox")
         window.dispatchEvent(new PopStateEvent("popstate"))
       }
     }
@@ -252,6 +252,104 @@ function AuthorizePage() {
           <p className="mt-5 text-center text-[11px] leading-5 text-[#88938a]">
             By continuing, you agree to share this information with FINNA. Your data is encrypted end-to-end.
           </p>
+        </div>
+      </motion.div>
+    </Shell>
+  )
+}
+
+function SetuSandboxPage() {
+  const { consent, approveConsent } = useConsent()
+  const [step, setStep] = useState(0)
+  const [selectedBanks, setSelectedBanks] = useState<string[]>(["State Bank of India"])
+
+  const proceedToRetrieval = () => {
+    approveConsent()
+    window.history.pushState({}, "", "/mock-aa/retrieving")
+    window.dispatchEvent(new PopStateEvent("popstate"))
+  }
+
+  const toggleBank = (bank: string) => {
+    setSelectedBanks((current) =>
+      current.includes(bank) ? current.filter((item) => item !== bank) : [...current, bank]
+    )
+  }
+
+  return (
+    <Shell back>
+      <motion.div {...fade} className="mx-auto max-w-3xl pt-10 md:pt-20">
+        <div className="mx-auto max-w-lg overflow-hidden rounded-[2rem] border border-[#dedede] bg-white shadow-[0_18px_60px_rgba(0,0,0,.08)]">
+          <div className="flex items-center justify-between border-b border-[#eeeeee] px-7 py-6 md:px-10">
+            <div className="flex items-center gap-3">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-[#334d7c] text-white">
+                <Building2 className="size-5" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-[.18em] text-[#777777]">Sandbox preview</p>
+                <p className="font-medium">Setu Account Aggregator</p>
+              </div>
+            </div>
+            <span className="rounded-full bg-[#edf2ff] px-2.5 py-1 text-[10px] font-medium text-[#405b8a]">DEMO</span>
+          </div>
+
+          <div className="px-7 py-8 md:px-10">
+            <div className="mb-8 flex items-center gap-2">
+              {[0, 1, 2, 3].map((item) => (
+                <span key={item} className={`h-1 flex-1 rounded-full ${item <= step ? "bg-[#334d7c]" : "bg-[#e8e8e8]"}`} />
+              ))}
+            </div>
+
+            {step === 0 && (
+              <>
+                <div className="flex size-12 items-center justify-center rounded-2xl bg-[#eef3ff] text-[#334d7c]"><Smartphone className="size-6" /></div>
+                <h1 className="mt-5 text-3xl font-medium tracking-[-.04em]">Verify your mobile</h1>
+                <p className="mt-3 text-sm leading-6 text-[#666666]">Your mobile number helps find the accounts you choose to link. This is a sandbox demonstration.</p>
+                <label className="mt-7 block text-xs font-medium text-[#555555]">Mobile number</label>
+                <input defaultValue="98765 43210" inputMode="numeric" className="mt-2 w-full rounded-xl border border-[#dcdcdc] px-4 py-3 text-sm outline-none ring-[#334d7c] focus:ring-2" />
+                <button onClick={() => setStep(1)} className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-[#334d7c] py-3.5 text-sm font-medium text-white hover:bg-[#263d67]">Continue <ArrowRight className="size-4" /></button>
+              </>
+            )}
+
+            {step === 1 && (
+              <>
+                <Pill><Smartphone className="size-3.5" /> One-time password</Pill>
+                <h1 className="mt-5 text-3xl font-medium tracking-[-.04em]">Enter verification code</h1>
+                <p className="mt-3 text-sm leading-6 text-[#666666]">In a live flow, Setu sends a one-time password to your mobile. Any six digits work in this demo.</p>
+                <input placeholder="••••••" inputMode="numeric" maxLength={6} className="mt-7 w-full rounded-xl border border-[#dcdcdc] px-4 py-3 text-center text-lg tracking-[.5em] outline-none ring-[#334d7c] focus:ring-2" />
+                <button onClick={() => setStep(2)} className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-[#334d7c] py-3.5 text-sm font-medium text-white hover:bg-[#263d67]">Verify and continue <ArrowRight className="size-4" /></button>
+              </>
+            )}
+
+            {step === 2 && (
+              <>
+                <Pill><Building2 className="size-3.5" /> Select institutions</Pill>
+                <h1 className="mt-5 text-3xl font-medium tracking-[-.04em]">Choose accounts to link</h1>
+                <p className="mt-3 text-sm leading-6 text-[#666666]">A live Account Aggregator shows eligible financial institutions. Choose any sample bank to continue.</p>
+                <div className="mt-6 space-y-3">
+                  {["State Bank of India", "HDFC Bank", "ICICI Bank"].map((bank) => {
+                    const checked = selectedBanks.includes(bank)
+                    return <button key={bank} onClick={() => toggleBank(bank)} className={`flex w-full items-center justify-between rounded-2xl border p-4 text-left text-sm transition ${checked ? "border-[#334d7c] bg-[#f4f7ff]" : "border-[#e2e2e2] hover:bg-[#fafafa]"}`}><span className="font-medium">{bank}</span><span className={`flex size-6 items-center justify-center rounded-full ${checked ? "bg-[#334d7c] text-white" : "border border-[#cfcfcf]"}`}>{checked && <Check className="size-3.5" />}</span></button>
+                  })}
+                </div>
+                <button disabled={!selectedBanks.length} onClick={() => setStep(3)} className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-[#334d7c] py-3.5 text-sm font-medium text-white hover:bg-[#263d67] disabled:opacity-50">Review consent <ArrowRight className="size-4" /></button>
+              </>
+            )}
+
+            {step === 3 && (
+              <>
+                <div className="flex size-12 items-center justify-center rounded-2xl bg-[#eef3ff] text-[#334d7c]"><ShieldCheck className="size-6" /></div>
+                <h1 className="mt-5 text-3xl font-medium tracking-[-.04em]">Review and approve</h1>
+                <p className="mt-3 text-sm leading-6 text-[#666666]">You are about to share the selected account information with FINNA.</p>
+                <div className="mt-6 rounded-2xl bg-[#f7f7f7] p-4 text-sm">
+                  <div className="flex justify-between"><span className="text-[#666666]">Requested by</span><strong>FINNA</strong></div>
+                  <div className="mt-3 flex justify-between"><span className="text-[#666666]">Accounts</span><strong>{selectedBanks.length} selected</strong></div>
+                  <div className="mt-3 flex justify-between"><span className="text-[#666666]">Access duration</span><strong>{consent.duration}</strong></div>
+                </div>
+                <button onClick={proceedToRetrieval} className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-[#334d7c] py-3.5 text-sm font-medium text-white hover:bg-[#263d67]">Approve and share data <ArrowRight className="size-4" /></button>
+                <p className="mt-4 text-center text-[11px] leading-5 text-[#88938a]">Demo only — no bank or personal data is collected.</p>
+              </>
+            )}
+          </div>
         </div>
       </motion.div>
     </Shell>
@@ -611,6 +709,8 @@ export function FinnaApp() {
       <motion.div key={path}>
         {path === "/mock-aa/authorize" ? (
           <AuthorizePage />
+        ) : path === "/mock-aa/setu-sandbox" ? (
+          <SetuSandboxPage />
         ) : path === "/mock-aa/callback" || path === "/consent/callback" ? (
           <CallbackPage />
         ) : path === "/mock-aa/retrieving" ? (
