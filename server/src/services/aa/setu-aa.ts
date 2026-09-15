@@ -9,6 +9,7 @@ export class SetuAAService implements AccountAggregatorService {
   private clientId: string
   private clientSecret: string
   private productInstanceId: string
+  private redirectUrl: string
   private cachedToken: string | null = null
   private tokenExpiresAt: number = 0
 
@@ -18,6 +19,7 @@ export class SetuAAService implements AccountAggregatorService {
     this.clientId = process.env.SETU_CLIENT_ID || ""
     this.clientSecret = process.env.SETU_CLIENT_SECRET || ""
     this.productInstanceId = process.env.SETU_PRODUCT_INSTANCE_ID || ""
+    this.redirectUrl = process.env.SETU_REDIRECT_URL || process.env.AA_REDIRECT_URL || "http://localhost:3000/mock-aa/callback"
   }
 
   /**
@@ -29,25 +31,30 @@ export class SetuAAService implements AccountAggregatorService {
     }
 
     if (!this.clientId || !this.clientSecret) {
-      throw new Error("SETU_CLIENT_ID and SETU_CLIENT_SECRET must be configured in environment variables.")
+      throw new Error("SETU_CLIENT_ID and SETU_CLIENT_SECRET must be configured in environment variables for live Setu AA mode.")
     }
 
     try {
       const response = await axios.post(this.authUrl, {
         clientID: this.clientId,
         secret: this.clientSecret,
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
         grant_type: "client_credentials"
       })
 
-      const { access_token, expiresIn } = response.data
-      this.cachedToken = access_token
-      // Set expiration (defaults to 1800s if not specified)
-      const validFor = (expiresIn || 1800) * 1000
-      this.tokenExpiresAt = Date.now() + validFor
+      const token = response.data.access_token || response.data.accessToken || response.data.token
+      if (!token) {
+        throw new Error("No access token returned in Setu Auth response")
+      }
 
-      return access_token
+      const expiresIn = response.data.expiresIn || response.data.expires_in || 1800
+      this.cachedToken = token
+      this.tokenExpiresAt = Date.now() + expiresIn * 1000
+
+      return token
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || "Unknown error"
+      const msg = err.response?.data?.message || err.response?.data?.errorMsg || err.message || "Unknown error"
       throw new Error(`Failed to authenticate with Setu Account Service: ${msg}`)
     }
   }
@@ -68,14 +75,23 @@ export class SetuAAService implements AccountAggregatorService {
 
   async createConsent(params: ConsentRequestParams): Promise<ConsentResponse> {
     if (!this.productInstanceId) {
-      console.warn("[SetuAAService] SETU_PRODUCT_INSTANCE_ID is not configured. Setu AA requests will require this header from your Setu Bridge dashboard.")
+      console.warn("[SetuAAService] SETU_PRODUCT_INSTANCE_ID is not configured. Setu AA requests may require this header from your Setu Bridge dashboard.")
     }
 
     const headers = await this.getHeaders()
 
-    const payload = {
+    // Normalize phone number to standard 10 digits
+    let cleanPhone = (params.phoneNumber || "").replace(/\D/g, "")
+    if (cleanPhone.length > 10 && cleanPhone.startsWith("91")) {
+      cleanPhone = cleanPhone.slice(cleanPhone.length - 10)
+    }
+
+    // Determine VUA (Virtual User Address)
+    const vua = params.vpa || (cleanPhone ? (cleanPhone.includes("@") ? cleanPhone : `${cleanPhone}@setu`) : "9876543210@setu")
+
+    const payload: Record<string, any> = {
       consentDuration: { unit: "MONTH", value: 12 },
-      vua: params.vpa || params.phoneNumber,
+      vua,
       consentTypes: ["TRANSACTIONS", "PROFILE", "SUMMARY"],
       fiTypes: ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"],
       dataRange: {
@@ -92,19 +108,27 @@ export class SetuAAService implements AccountAggregatorService {
         text: "Personal Finance Management",
         refUri: "https://api.rebit.org.in/aa/purpose/101.xml",
         category: { type: "string" }
-      }
+      },
+      redirectUrl: this.redirectUrl,
+      context: [
+        { key: "redirect_url", value: this.redirectUrl },
+        { key: "user_id", value: params.userId }
+      ]
     }
 
     try {
       const response = await axios.post(`${this.baseUrl}/v2/consents`, payload, { headers })
       const data = response.data
 
+      const rawStatus = (data.status || "PENDING").toUpperCase()
+      const normalizedStatus = rawStatus === "ACTIVE" ? "APPROVED" : (rawStatus as ConsentResponse["status"])
+
       return {
         consentId: data.id || data.consentId || data.consent_id,
-        status: data.status || "PENDING",
-        url: data.url || data.redirectUrl || data.consentUrl,
+        status: normalizedStatus,
+        url: data.url || data.redirectUrl || data.consentUrl || data.url_web || data.consent_url,
         createdAt: data.createdAt || new Date().toISOString(),
-        expiresAt: data.consentExpiry || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+        expiresAt: data.consentExpiry || data.expiresAt || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
       }
     } catch (err: any) {
       const detail = err.response?.data?.errorMsg || err.response?.data?.message || JSON.stringify(err.response?.data) || err.message
@@ -117,12 +141,15 @@ export class SetuAAService implements AccountAggregatorService {
     try {
       const response = await axios.get(`${this.baseUrl}/v2/consents/${consentId}`, { headers })
       const data = response.data
+      const rawStatus = (data.status || "PENDING").toUpperCase()
+      const normalizedStatus = rawStatus === "ACTIVE" ? "APPROVED" : (rawStatus as ConsentResponse["status"])
+
       return {
         consentId: data.id || consentId,
-        status: data.status,
+        status: normalizedStatus,
         url: data.url || data.redirectUrl,
-        createdAt: data.createdAt,
-        expiresAt: data.consentExpiry
+        createdAt: data.createdAt || new Date().toISOString(),
+        expiresAt: data.consentExpiry || data.expiresAt || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
       }
     } catch (err: any) {
       const detail = err.response?.data?.errorMsg || err.response?.data?.message || err.message
@@ -172,26 +199,30 @@ export class SetuAAService implements AccountAggregatorService {
     const accounts: AAAccount[] = []
     const transactions: AATransaction[] = []
 
-    if (payload?.Payload) {
-      for (const fipData of payload.Payload) {
-        for (const acc of fipData.data?.account || []) {
-          accounts.push({
-            bank: acc.profile?.holders?.holder?.[0]?.name || fipData.fipId || "Bank Account",
-            accountType: acc.summary?.type || "Savings",
-            maskedAccount: acc.maskedAccNumber || "XXXXXX0000",
-            balance: parseFloat(acc.summary?.currentBalance || "0")
-          })
+    const payloadList = Array.isArray(payload?.Payload) ? payload.Payload : payload?.data ? [payload.data] : []
 
-          for (const txn of acc.transactions?.transaction || []) {
-            transactions.push({
-              date: txn.transactionTimestamp?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-              description: txn.narration || "Transaction",
-              amount: parseFloat(txn.amount || "0"),
-              type: txn.type === "DEBIT" ? "DEBIT" : "CREDIT",
-              category: txn.type === "CREDIT" ? "Gig Income" : "Personal",
-              platform: null
-            })
-          }
+    for (const fipData of payloadList) {
+      const accList = fipData.data?.account || fipData.account || []
+      for (const acc of Array.isArray(accList) ? accList : [accList]) {
+        if (!acc) continue
+        accounts.push({
+          bank: acc.profile?.holders?.holder?.[0]?.name || fipData.fipId || "Bank Account",
+          accountType: acc.summary?.type || "Savings",
+          maskedAccount: acc.maskedAccNumber || acc.maskedAccountNumber || "XXXXXX0000",
+          balance: parseFloat(acc.summary?.currentBalance || acc.summary?.balance || "0")
+        })
+
+        const txnList = acc.transactions?.transaction || acc.transactions || []
+        for (const txn of Array.isArray(txnList) ? txnList : [txnList]) {
+          if (!txn) continue
+          transactions.push({
+            date: txn.transactionTimestamp?.slice(0, 10) || txn.txnDate?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+            description: txn.narration || txn.description || "Transaction",
+            amount: parseFloat(txn.amount || "0"),
+            type: txn.type === "DEBIT" ? "DEBIT" : "CREDIT",
+            category: txn.type === "CREDIT" ? "Gig Income" : (txn.category || "Personal"),
+            platform: txn.platform || null
+          })
         }
       }
     }

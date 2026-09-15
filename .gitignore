@@ -39,3 +39,7 @@ synthetic_transactions.json
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# foglamp
+.foglamp/
+.env*

@@ -155,19 +155,29 @@ class FinnaApiClient {
   }
 
   // Consent & AA
-  async createConsent(phone?: string, vpa?: string) {
-    return this.request<{ consentId: string; status: string; url?: string }>("/consent", {
+  async getAaMode() {
+    return this.request<{ useMock: boolean; aaMode: string; timestamp: string }>("/consent/mode")
+  }
+
+  async createConsent(phone?: string, vpa?: string, userId?: string) {
+    return this.request<{ consentId: string; status: string; url?: string; record?: any }>("/consent", {
       method: "POST",
-      body: JSON.stringify({ phone, vpa })
+      body: JSON.stringify({ phone, vpa, userId })
     })
   }
 
   async getConsentStatus(consentId: string) {
-    return this.request<{ consentId: string; status: string }> (`/consent/${consentId}`)
+    return this.request<{ consentId: string; status: string; url?: string; createdAt?: string; expiresAt?: string }>(`/consent/${consentId}`)
+  }
+
+  async fetchConsentFinancialData(consentId: string) {
+    return this.request<{ success: boolean; consentId: string; accountsCount: number; transactionsCount: number; data: any }>(`/consent/${consentId}/fetch-data`, {
+      method: "POST"
+    })
   }
 
   async revokeConsent(consentId: string) {
-    return this.request<{ status: string }>(`/consent/${consentId}/revoke`, {
+    return this.request<{ status: string; message: string; consentId: string }>(`/consent/${consentId}/revoke`, {
       method: "POST"
     })
   }
