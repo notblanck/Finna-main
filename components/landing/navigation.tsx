@@ -65,12 +65,13 @@ export function Navigation() {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
-            <a href="#" className={`text-foreground/70 hover:text-foreground transition-all duration-500 ${isScrolled ? "text-xs" : "text-sm"}`}>
+            <a href="/login" className={`text-foreground/70 hover:text-foreground transition-all duration-500 ${isScrolled ? "text-xs" : "text-sm"}`}>
               Sign in
             </a>
             <Button
               size="sm"
               className={`bg-foreground hover:bg-foreground/90 text-background rounded-full transition-all duration-500 ${isScrolled ? "px-4 h-8 text-xs" : "px-6"}`}
+              onClick={() => { window.location.href = "/login" }}
             >
               Start creating
             </Button>
@@ -132,13 +133,13 @@ export function Navigation() {
             <Button 
               variant="outline" 
               className="flex-1 rounded-full h-14 text-base"
-              onClick={() => setIsMobileMenuOpen(false)}
+              onClick={() => { setIsMobileMenuOpen(false); window.location.href = "/login"; }}
             >
               Sign in
             </Button>
             <Button 
               className="flex-1 bg-foreground text-background rounded-full h-14 text-base"
-              onClick={() => setIsMobileMenuOpen(false)}
+              onClick={() => { setIsMobileMenuOpen(false); window.location.href = "/login"; }}
             >
               Start creating
             </Button>

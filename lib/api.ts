@@ -137,7 +137,7 @@ class FinnaApiClient {
 
   // Auth
   async requestOtp(phone: string) {
-    return this.request<{ message: string; phone: string }>("/auth/otp/request", {
+    return this.request<{ message: string; phone: string; mockOtp?: string }>("/auth/otp/request", {
       method: "POST",
       body: JSON.stringify({ phone })
     })
@@ -147,6 +147,20 @@ class FinnaApiClient {
     return this.request<{ session: any; user: ApiUser }>("/auth/otp/verify", {
       method: "POST",
       body: JSON.stringify({ phone, token })
+    })
+  }
+
+  async requestEmailOtp(email: string) {
+    return this.request<{ message: string; email: string; mockOtp?: string }>("/auth/otp/request", {
+      method: "POST",
+      body: JSON.stringify({ email })
+    })
+  }
+
+  async verifyEmailOtp(email: string, token: string) {
+    return this.request<{ session: any; user: ApiUser }>("/auth/otp/verify", {
+      method: "POST",
+      body: JSON.stringify({ email, token })
     })
   }
 
