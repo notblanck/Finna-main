@@ -1,2 +1,2 @@
-export { Auth1 } from "./auth/auth-1"
-export { Auth1 as default } from "./auth/auth-1"
+export { Auth as Auth1, Auth } from "./ui/auth-form-1"
+export { Auth as default } from "./ui/auth-form-1"
