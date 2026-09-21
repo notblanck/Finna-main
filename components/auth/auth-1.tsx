@@ -436,11 +436,13 @@ export function Auth1({ onSuccess, redirectTo = "/dashboard" }: Auth1Props) {
                       )}
                     </button>
 
-                    <div className="rounded-xl bg-[#fafbf8] border border-[#edf0e9] p-3 text-center">
-                      <p className="text-[11px] text-[#657067]">
-                        Tip: For instant testing in sandbox/demo mode, you can use code <strong className="text-[#17211b] font-mono">123456</strong>.
-                      </p>
-                    </div>
+                    {email === "rider.demo@finna.ai" && (
+                      <div className="rounded-xl bg-[#fafbf8] border border-[#edf0e9] p-3 text-center">
+                        <p className="text-[11px] text-[#657067]">
+                          Demo Account: Use code <strong className="text-[#17211b] font-mono">123456</strong> to sign in.
+                        </p>
+                      </div>
+                    )}
                   </motion.form>
                 )}
               </AnimatePresence>

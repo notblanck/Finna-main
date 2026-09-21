@@ -1,11 +1,9 @@
 import { Router, Request, Response } from "express"
 import { supabaseAdmin, supabasePublic } from "../services/supabase.js"
-import { otpStore } from "../services/otpStore.js"
-import { sendOtpEmail } from "../services/email.js"
 
 export const authRouter = Router()
 
-// POST /auth/otp/request - request phone or email OTP
+// POST /auth/otp/request - request email OTP via Supabase Auth
 authRouter.post("/otp/request", async (req: Request, res: Response) => {
   try {
     const { phone, email } = req.body
@@ -13,7 +11,7 @@ authRouter.post("/otp/request", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Email or phone number is required" })
     }
 
-    // Email OTP flow (Real 2FA with Email delivery)
+    // Email OTP flow
     if (email) {
       const normalizedEmail = String(email).trim().toLowerCase()
       
@@ -21,35 +19,30 @@ authRouter.post("/otp/request", async (req: Request, res: Response) => {
         return res.status(400).json({ error: "Please provide a valid email address" })
       }
 
-      const code = otpStore.createOtp(normalizedEmail)
-
-      // Dedicated demo account
+      // Demo account
       if (normalizedEmail === "rider.demo@finna.ai") {
         return res.json({
-          message: "OTP sent successfully to demo account. (Demo OTP: 123456)",
+          message: "Demo account OTP ready (Demo OTP: 123456)",
           email: normalizedEmail,
           isDemo: true
         })
       }
 
-      try {
-        const mailResult = await sendOtpEmail({
-          email: normalizedEmail,
-          otp: code
-        })
+      const { data, error } = await supabasePublic.auth.signInWithOtp({
+        email: normalizedEmail,
+        options: { shouldCreateUser: true }
+      })
 
-        return res.json({
-          message: `A 6-digit verification code has been sent to ${normalizedEmail}. Please check your inbox and spam folder.`,
-          email: normalizedEmail,
-          previewUrl: mailResult.previewUrl
-        })
-      } catch (mailErr: any) {
-        console.error("[Backend Auth] Failed to send OTP email:", mailErr)
-        return res.status(500).json({
-          error: "Failed to dispatch verification email. Please check your email configuration.",
-          details: mailErr.message
-        })
+      if (error) {
+        console.error("[Supabase Express OTP Error]", error)
+        return res.status(400).json({ error: error.message })
       }
+
+      return res.json({
+        message: `A 6-digit verification code has been sent to ${normalizedEmail}. Please check your inbox and spam folder.`,
+        email: normalizedEmail,
+        data
+      })
     }
 
     // Phone OTP flow
@@ -86,50 +79,58 @@ authRouter.post("/otp/verify", async (req: Request, res: Response) => {
 
     const trimmedToken = String(token).trim()
 
-    // Email verification flow (Strict validation against OTP store)
+    // Email verification flow
     if (email) {
       const normalizedEmail = String(email).trim().toLowerCase()
 
-      const verification = otpStore.verifyOtp(normalizedEmail, trimmedToken)
-      if (!verification.success) {
-        return res.status(400).json({
-          error: verification.error || "Invalid or expired verification code."
+      if (normalizedEmail === "rider.demo@finna.ai" && trimmedToken === "123456") {
+        const demoUser = {
+          id: "demo-rider-001",
+          email: normalizedEmail,
+          full_name: "Aakash Verma (Gig Partner)",
+          preferred_language: "en"
+        }
+        return res.json({
+          session: {
+            access_token: "finna-demo-token-12345",
+            token_type: "bearer",
+            expires_in: 86400
+          },
+          user: demoUser
         })
       }
 
-      const isDemo = normalizedEmail === "rider.demo@finna.ai"
-      const userId = isDemo ? "demo-rider-001" : `usr-${Date.now()}`
-      const fullName = isDemo 
-        ? "Aakash Verma (Gig Partner)" 
-        : normalizedEmail.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, c => c.toUpperCase())
-
-      const user = {
-        id: userId,
+      const { data, error } = await supabasePublic.auth.verifyOtp({
         email: normalizedEmail,
-        full_name: fullName,
-        preferred_language: "en"
+        token: trimmedToken,
+        type: "email"
+      })
+
+      if (error) {
+        return res.status(400).json({ error: error.message || "Invalid or expired verification code." })
       }
 
-      const session = {
-        access_token: `finna-jwt-${isDemo ? "demo" : Date.now()}`,
-        token_type: "bearer",
-        expires_in: 86400,
-        user
+      const authUser = data.user || {}
+      const user = {
+        id: authUser.id || `user-${Date.now()}`,
+        email: normalizedEmail,
+        full_name: authUser.user_metadata?.full_name || normalizedEmail.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase()),
+        preferred_language: authUser.user_metadata?.preferred_language || "en"
       }
 
-      // Upsert user profile into database if Supabase is connected
+      // Upsert user profile into database
       try {
         await supabaseAdmin.from("users").upsert({
-          id: userId,
+          id: user.id,
           email: normalizedEmail,
-          full_name: fullName,
+          full_name: user.full_name,
           preferred_language: "en"
         })
       } catch (dbErr) {
-        // Silently skip if table schema or offline
+        // Silently skip if table schema is offline
       }
 
-      return res.json({ session, user })
+      return res.json({ session: data.session, user })
     }
 
     // Phone verification flow
@@ -152,62 +153,6 @@ authRouter.post("/otp/verify", async (req: Request, res: Response) => {
       phone,
       token: trimmedToken,
       type: "sms"
-    })
-
-    if (error) {
-      return res.status(400).json({ error: error.message })
-    }
-
-    return res.json({ session: data.session, user: data.user })
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message })
-  }
-})
-
-// POST /auth/signup-email
-authRouter.post("/signup-email", async (req: Request, res: Response) => {
-  try {
-    const { email, password, fullName, preferredLanguage } = req.body
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" })
-    }
-
-    const { data, error } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: fullName, preferred_language: preferredLanguage || "en" }
-    })
-
-    if (error) {
-      return res.status(400).json({ error: error.message })
-    }
-
-    // Insert or update profile
-    await supabaseAdmin.from("users").upsert({
-      id: data.user.id,
-      email,
-      full_name: fullName,
-      preferred_language: preferredLanguage || "en"
-    })
-
-    return res.status(201).json({ user: data.user })
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message })
-  }
-})
-
-// POST /auth/login-email
-authRouter.post("/login-email", async (req: Request, res: Response) => {
-  try {
-    const { email, password } = req.body
-    if (!email || !password) {
-      return res.status(400).json({ error: "Email and password are required" })
-    }
-
-    const { data, error } = await supabasePublic.auth.signInWithPassword({
-      email,
-      password
     })
 
     if (error) {
