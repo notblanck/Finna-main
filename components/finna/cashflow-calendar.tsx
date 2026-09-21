@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import { Calendar } from "@/components/ui/calendar"
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -51,6 +52,7 @@ export function CashflowCalendar({ onBack }: CashflowCalendarProps) {
   const [daysData, setDaysData] = useState<CashflowDayItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [selectedDay, setSelectedDay] = useState<CashflowDayItem | null>(null)
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => new Date())
   const [selectedHorizon, setSelectedHorizon] = useState<"7" | "30" | "90">("90")
   const [viewMode, setViewMode] = useState<"calendar" | "timeline">("calendar")
   const [currentMonthIndex, setCurrentMonthIndex] = useState(0)
@@ -66,6 +68,8 @@ export function CashflowCalendar({ onBack }: CashflowCalendarProps) {
           if (json.days && json.days.length > 0) {
             setDaysData(json.days)
             setSelectedDay(json.days[0])
+            const [y, m, d] = json.days[0].date.split("-").map(Number)
+            setSelectedDate(new Date(y, m - 1, d))
             return
           }
         }
@@ -84,8 +88,10 @@ export function CashflowCalendar({ onBack }: CashflowCalendarProps) {
         const dayOfWeekIdx = targetDate.getDay()
         const dayOfWeek = weekdays[dayOfWeekIdx]
         const dayNumber = targetDate.getDate()
-        const monthName = monthNames[targetDate.getMonth()]
-        const dateStr = targetDate.toISOString().slice(0, 10)
+        const y = targetDate.getFullYear()
+        const m = String(targetDate.getMonth() + 1).padStart(2, "0")
+        const d = String(dayNumber).padStart(2, "0")
+        const dateStr = `${y}-${m}-${d}`
 
         const isWeekend = dayOfWeekIdx === 0 || dayOfWeekIdx === 5 || dayOfWeekIdx === 6
         const isMonthEnd = dayNumber >= 28 || dayNumber <= 3
@@ -185,6 +191,72 @@ export function CashflowCalendar({ onBack }: CashflowCalendarProps) {
     const avgDailySaved = visibleDays.length > 0 ? Math.round(totalSaved / visibleDays.length) : 0
     return { totalEarned, totalSpent, totalSaved, avgDailySaved }
   }, [visibleDays])
+
+  const formatDateKey = (d: Date): string => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${y}-${m}-${day}`
+  }
+
+  const handleSelectDate = (date: Date | undefined) => {
+    if (!date) return
+    setSelectedDate(date)
+    const key = formatDateKey(date)
+    const found = daysData.find((d) => d.date === key)
+    if (found) {
+      setSelectedDay(found)
+    } else {
+      const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+      const dayOfWeek = weekdays[date.getDay()]
+      const dayNumber = date.getDate()
+      const monthName = monthNames[date.getMonth()]
+      const isWeekend = date.getDay() === 0 || date.getDay() === 5 || date.getDay() === 6
+      const isMonthEnd = dayNumber >= 28 || dayNumber <= 3
+      const earned = isWeekend ? 1900 : 1300
+      let spent = 410
+      if (isMonthEnd) spent += 1150
+      const saved = Math.max(0, earned - spent)
+
+      setSelectedDay({
+        date: key,
+        dayOfWeek,
+        dayNumber,
+        monthName,
+        status: "predicted",
+        is_future: true,
+        earned,
+        spent,
+        saved,
+        transactions_count: isWeekend ? 8 : 5,
+        driver: isWeekend ? "Weekend Volume Surge" : "Standard Weekday Route",
+        confidence: "medium",
+        breakdown: {
+          incomeSources: isWeekend
+            ? [
+                { name: "Swiggy Dinner Surge", amount: Math.round(earned * 0.55) },
+                { name: "Uber Ride Hail Pulse", amount: Math.round(earned * 0.35) },
+                { name: "Incentive Target Bonus", amount: Math.round(earned * 0.1) }
+              ]
+            : [
+                { name: "Regular Gig Deliveries", amount: Math.round(earned * 0.7) },
+                { name: "Midday Micro-Orders", amount: Math.round(earned * 0.3) }
+              ],
+          expenses: isMonthEnd
+            ? [
+                { name: "Bike EMI / Maintenance", amount: 1150 },
+                { name: "Fuel & Battery Swap", amount: 260 },
+                { name: "Daily Food & Water", amount: 150 }
+              ]
+            : [
+                { name: "Fuel & Battery Swap", amount: Math.round(spent * 0.65) },
+                { name: "Daily Food & Water", amount: Math.round(spent * 0.35) }
+              ]
+        }
+      })
+    }
+  }
 
   return (
     <div className="w-full space-y-8 pb-16">
@@ -328,117 +400,44 @@ export function CashflowCalendar({ onBack }: CashflowCalendarProps) {
         {/* Left / Center: The Calendar or Timeline View */}
         <div className="lg:col-span-8 rounded-[2rem] border border-[#dfe5d9] bg-white p-6 md:p-8 shadow-sm">
           {viewMode === "calendar" ? (
-            <div>
-              {/* Month Navigation */}
-              <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#edf0e9]">
-                <div className="flex items-center gap-3">
-                  <span className="flex size-9 items-center justify-center rounded-2xl bg-[#edf6dc] text-[#4e683d]">
+            <div className="flex flex-col items-center">
+              <div className="w-full flex items-center justify-between mb-4 pb-3 border-b border-[#edf0e9]">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex size-8 items-center justify-center rounded-xl bg-[#edf6dc] text-[#4e683d]">
                     <CalendarIcon className="size-4" />
                   </span>
                   <div>
-                    <h3 className="text-xl font-bold text-[#17211b]">{currentMonth?.monthLabel || "Upcoming"}</h3>
+                    <h3 className="text-base font-semibold text-[#17211b]">Forecast Calendar</h3>
                     <p className="text-xs text-[#657067]">
-                      Showing {currentMonth?.days.length || 0} forecast days in this cycle
+                      Select any date to view its expected earnings, expenses & savings
                     </p>
                   </div>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    disabled={currentMonthIndex <= 0}
-                    onClick={() => setCurrentMonthIndex((prev) => Math.max(0, prev - 1))}
-                    className="p-2 rounded-xl border border-[#dfe5d9] hover:bg-[#f8f9f5] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <ChevronLeft className="size-4 text-[#17211b]" />
-                  </button>
-                  <span className="text-xs font-medium text-[#657067]">
-                    {currentMonthIndex + 1} of {monthsGrouped.length}
+                {selectedDay && (
+                  <span className="rounded-full bg-[#edf6dc] px-3 py-1 text-xs font-semibold text-[#3a5823]">
+                    {selectedDay.monthName} {selectedDay.dayNumber} Selected
                   </span>
-                  <button
-                    disabled={currentMonthIndex >= monthsGrouped.length - 1}
-                    onClick={() => setCurrentMonthIndex((prev) => Math.min(monthsGrouped.length - 1, prev + 1))}
-                    className="p-2 rounded-xl border border-[#dfe5d9] hover:bg-[#f8f9f5] disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    <ChevronRight className="size-4 text-[#17211b]" />
-                  </button>
+                )}
+              </div>
+
+              <div className="w-full flex justify-center py-2">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={handleSelectDate}
+                  className="rounded-2xl border border-[#edf0e9] bg-[#fafbf8] p-4 sm:p-6 shadow-xs w-full max-w-md [--cell-size:2.85rem] sm:[--cell-size:3.25rem]"
+                />
+              </div>
+
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-6 text-xs text-[#657067]">
+                <div className="flex items-center gap-2">
+                  <span className="size-3 rounded-full bg-[#17211b]" />
+                  <span>Selected date</span>
                 </div>
-              </div>
-
-              {/* Day Labels */}
-              <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-wider text-[#8a968c] mb-3">
-                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                  <div key={day} className="py-1">
-                    {day}
-                  </div>
-                ))}
-              </div>
-
-              {/* Calendar Grid Cells */}
-              <div className="grid grid-cols-7 gap-2 sm:gap-3">
-                {/* Empty padding cells for weekday offset */}
-                {(() => {
-                  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-                  const firstDayOfWeek = currentMonth?.days[0]?.dayOfWeek
-                  const offset = firstDayOfWeek ? weekdays.indexOf(firstDayOfWeek) : 0
-                  return Array.from({ length: Math.max(0, offset) }).map((_, i) => (
-                    <div key={`blank-${i}`} className="hidden sm:block min-h-[96px] sm:min-h-[108px] rounded-2xl border border-transparent p-2.5 opacity-0 pointer-events-none" />
-                  ))
-                })()}
-
-                {currentMonth?.days.map((day) => {
-                  const isSelected = selectedDay?.date === day.date
-                  const isWeekend = day.dayOfWeek === "Sat" || day.dayOfWeek === "Sun"
-
-                  return (
-                    <motion.div
-                      key={day.date}
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      onClick={() => setSelectedDay(day)}
-                      className={`relative min-h-[96px] sm:min-h-[108px] rounded-2xl p-2.5 sm:p-3 flex flex-col justify-between border cursor-pointer transition ${
-                        isSelected
-                          ? "border-[#17211b] bg-[#f4f7ee] ring-2 ring-[#17211b] shadow-sm"
-                          : isWeekend
-                          ? "border-[#dfe5d9] bg-[#fafbf8] hover:border-[#a0b58e]"
-                          : "border-[#edf0e9] bg-white hover:border-[#ccd7c6]"
-                      }`}
-                    >
-                      {/* Top Day Header */}
-                      <div className="flex items-center justify-between">
-                        <span className={`text-xs font-bold ${isSelected ? "text-[#17211b]" : "text-[#526057]"}`}>
-                          {day.dayNumber} {day.monthName}
-                        </span>
-                        {isWeekend ? (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-[#edf6dc] text-[#4e683d]">
-                            Surge
-                          </span>
-                        ) : (
-                          <span className="text-[9px] font-medium text-[#8a968c]">
-                            {day.dayOfWeek}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Earnings & Expenses Badges */}
-                      <div className="space-y-1 my-1">
-                        <div className="text-[10px] sm:text-[11px] font-semibold text-[#3b7c25] flex items-center justify-between">
-                          <span className="text-[9px] text-[#556950] font-normal">Earn</span>
-                          <span>+₹{day.earned.toLocaleString("en-IN")}</span>
-                        </div>
-                        <div className="text-[10px] sm:text-[11px] font-medium text-rose-700 flex items-center justify-between">
-                          <span className="text-[9px] text-[#8c5255] font-normal">Spend</span>
-                          <span>-₹{day.spent.toLocaleString("en-IN")}</span>
-                        </div>
-                      </div>
-
-                      {/* Bottom Expected Savings Tag */}
-                      <div className="border-t border-[#edf0e9] pt-1 flex items-center justify-between text-[10px] font-bold text-[#17211b]">
-                        <span className="text-[9px] uppercase tracking-tight text-[#8a968c]">Save:</span>
-                        <span className="text-[#2c4e16]">₹{day.saved.toLocaleString("en-IN")}</span>
-                      </div>
-                    </motion.div>
-                  )
-                })}
+                <div className="flex items-center gap-2">
+                  <span className="size-3 rounded-full bg-[#edf6dc] border border-[#b4d291]" />
+                  <span>Next 90 days forecast</span>
+                </div>
               </div>
             </div>
           ) : (

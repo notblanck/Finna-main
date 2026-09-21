@@ -37,7 +37,10 @@ export async function GET(request: Request) {
       const dayOfWeek = weekdays[dayOfWeekIdx]
       const dayNumber = targetDate.getDate()
       const monthName = monthNames[targetDate.getMonth()]
-      const dateStr = targetDate.toISOString().slice(0, 10)
+      const y = targetDate.getFullYear()
+      const m = String(targetDate.getMonth() + 1).padStart(2, "0")
+      const d = String(dayNumber).padStart(2, "0")
+      const dateStr = `${y}-${m}-${d}`
 
       const isWeekend = dayOfWeekIdx === 0 || dayOfWeekIdx === 5 || dayOfWeekIdx === 6 // Fri, Sat, Sun are peak gig days
       const isMonthEnd = dayNumber >= 28 || dayNumber <= 3 // EMI / Rent / Bill cycle
