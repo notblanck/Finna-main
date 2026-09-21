@@ -50,7 +50,7 @@ const defaultTransactions: Transaction[] = [
   { id: "4", date: "14 Sep 2026", merchant: "Amazon India", category: "Shopping", amount: 1299, type: "debit" },
 ]
 
-const API_BASE = (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) || "http://localhost:4000/api/v1"
+const API_BASE = (typeof process !== "undefined" && process.env.NEXT_PUBLIC_API_URL) || "/api/v1"
 
 export async function getConsentStatus(id: string): Promise<Consent> {
   try {

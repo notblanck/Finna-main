@@ -4,7 +4,7 @@
  * Built to TRD §3 specifications.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1"
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/v1"
 
 export interface ApiUser {
   id: string
@@ -127,12 +127,19 @@ class FinnaApiClient {
       headers["Authorization"] = `Bearer ${this.token}`
     }
 
-    const res = await fetch(url, { ...options, headers })
-    if (!res.ok) {
-      const errorText = await res.text()
-      throw new Error(`API error ${res.status}: ${errorText}`)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 6000)
+
+    try {
+      const res = await fetch(url, { ...options, headers, signal: options.signal || controller.signal })
+      if (!res.ok) {
+        const errorText = await res.text()
+        throw new Error(`API error ${res.status}: ${errorText}`)
+      }
+      return res.json() as Promise<T>
+    } finally {
+      clearTimeout(timeoutId)
     }
-    return res.json() as Promise<T>
   }
 
   // Auth
