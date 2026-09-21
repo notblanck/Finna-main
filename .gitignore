@@ -39,4 +39,8 @@ synthetic_transactions.json
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# playwright
+.playwright-mcp/
+
 .env*
