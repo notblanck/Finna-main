@@ -134,7 +134,14 @@ class FinnaApiClient {
       const res = await fetch(url, { ...options, headers, signal: options.signal || controller.signal })
       if (!res.ok) {
         const errorText = await res.text()
-        throw new Error(`API error ${res.status}: ${errorText}`)
+        let parsedMessage = errorText
+        try {
+          const json = JSON.parse(errorText)
+          parsedMessage = json.error || json.message || errorText
+        } catch {
+          parsedMessage = `API error ${res.status}: ${errorText}`
+        }
+        throw new Error(parsedMessage)
       }
       return res.json() as Promise<T>
     } finally {

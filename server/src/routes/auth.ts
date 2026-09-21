@@ -1,5 +1,7 @@
 import { Router, Request, Response } from "express"
 import { supabaseAdmin, supabasePublic } from "../services/supabase.js"
+import { otpStore } from "../services/otpStore.js"
+import { sendOtpEmail } from "../services/email.js"
 
 export const authRouter = Router()
 
@@ -11,34 +13,43 @@ authRouter.post("/otp/request", async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Email or phone number is required" })
     }
 
-    // Email OTP flow
+    // Email OTP flow (Real 2FA with Email delivery)
     if (email) {
       const normalizedEmail = String(email).trim().toLowerCase()
-      // For demo/sandbox testing
-      if (normalizedEmail.includes("demo") || normalizedEmail.includes("finna.ai") || process.env.USE_MOCK_AUTH === "true") {
+      
+      if (!normalizedEmail.includes("@") || !normalizedEmail.includes(".")) {
+        return res.status(400).json({ error: "Please provide a valid email address" })
+      }
+
+      const code = otpStore.createOtp(normalizedEmail)
+
+      // Dedicated demo account
+      if (normalizedEmail === "rider.demo@finna.ai") {
         return res.json({
-          message: "OTP sent successfully to email (Demo Mode: use OTP 123456)",
+          message: "OTP sent successfully to demo account. (Demo OTP: 123456)",
           email: normalizedEmail,
-          mockOtp: "123456"
+          isDemo: true
         })
       }
 
-      const { data, error } = await supabasePublic.auth.signInWithOtp({
-        email: normalizedEmail,
-        options: { shouldCreateUser: true }
-      })
-
-      if (error) {
-        // Fallback gracefully for sandbox/demo if rate limited or SMTP config pending
-        console.warn("Supabase signInWithOtp notice:", error.message)
-        return res.json({
-          message: `OTP sent to ${normalizedEmail} (Use 123456 if testing offline)`,
+      try {
+        const mailResult = await sendOtpEmail({
           email: normalizedEmail,
-          mockOtp: "123456"
+          otp: code
+        })
+
+        return res.json({
+          message: `A 6-digit verification code has been sent to ${normalizedEmail}. Please check your inbox and spam folder.`,
+          email: normalizedEmail,
+          previewUrl: mailResult.previewUrl
+        })
+      } catch (mailErr: any) {
+        console.error("[Backend Auth] Failed to send OTP email:", mailErr)
+        return res.status(500).json({
+          error: "Failed to dispatch verification email. Please check your email configuration.",
+          details: mailErr.message
         })
       }
-
-      return res.json({ message: "OTP sent successfully to your email", email: normalizedEmail, data })
     }
 
     // Phone OTP flow
@@ -75,64 +86,50 @@ authRouter.post("/otp/verify", async (req: Request, res: Response) => {
 
     const trimmedToken = String(token).trim()
 
-    // Email verification flow
+    // Email verification flow (Strict validation against OTP store)
     if (email) {
       const normalizedEmail = String(email).trim().toLowerCase()
 
-      // Demo/Sandbox fallback
-      if (trimmedToken === "123456" || normalizedEmail.includes("demo") || process.env.USE_MOCK_AUTH === "true") {
-        const demoUserId = `user-${normalizedEmail.replace(/[^a-z0-9]/g, "").slice(0, 12) || "demo-123"}`
-        const demoSession = {
-          access_token: `finna-session-jwt-${demoUserId}`,
-          token_type: "bearer",
-          expires_in: 86400,
-          user: {
-            id: demoUserId,
-            email: normalizedEmail,
-            full_name: normalizedEmail.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
-            preferred_language: "en"
-          }
-        }
-        return res.json({ session: demoSession, user: demoSession.user })
+      const verification = otpStore.verifyOtp(normalizedEmail, trimmedToken)
+      if (!verification.success) {
+        return res.status(400).json({
+          error: verification.error || "Invalid or expired verification code."
+        })
       }
 
-      const { data, error } = await supabasePublic.auth.verifyOtp({
+      const isDemo = normalizedEmail === "rider.demo@finna.ai"
+      const userId = isDemo ? "demo-rider-001" : `usr-${Date.now()}`
+      const fullName = isDemo 
+        ? "Aakash Verma (Gig Partner)" 
+        : normalizedEmail.split("@")[0].replace(/[._-]/g, " ").replace(/\b\w/g, c => c.toUpperCase())
+
+      const user = {
+        id: userId,
         email: normalizedEmail,
-        token: trimmedToken,
-        type: "email"
-      })
-
-      if (error) {
-        // If Supabase token fails, check if fallback demo token was used
-        if (trimmedToken === "123456") {
-          const fallbackUser = {
-            id: `usr_${Date.now()}`,
-            email: normalizedEmail,
-            full_name: normalizedEmail.split("@")[0],
-            preferred_language: "en"
-          }
-          return res.json({
-            session: { access_token: `token_${Date.now()}`, token_type: "bearer", expires_in: 86400, user: fallbackUser },
-            user: fallbackUser
-          })
-        }
-        return res.status(400).json({ error: error.message })
+        full_name: fullName,
+        preferred_language: "en"
       }
 
-      // Upsert user profile into database
-      if (data.user) {
-        try {
-          await supabaseAdmin.from("users").upsert({
-            id: data.user.id,
-            email: data.user.email,
-            preferred_language: "en"
-          })
-        } catch (dbErr) {
-          console.warn("Could not upsert user to users table:", dbErr)
-        }
+      const session = {
+        access_token: `finna-jwt-${isDemo ? "demo" : Date.now()}`,
+        token_type: "bearer",
+        expires_in: 86400,
+        user
       }
 
-      return res.json({ session: data.session, user: data.user })
+      // Upsert user profile into database if Supabase is connected
+      try {
+        await supabaseAdmin.from("users").upsert({
+          id: userId,
+          email: normalizedEmail,
+          full_name: fullName,
+          preferred_language: "en"
+        })
+      } catch (dbErr) {
+        // Silently skip if table schema or offline
+      }
+
+      return res.json({ session, user })
     }
 
     // Phone verification flow
