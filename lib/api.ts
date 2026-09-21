@@ -4,7 +4,7 @@
  * Built to TRD §3 specifications.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000/api/v1"
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "/api/v1"
 
 export interface ApiUser {
   id: string
@@ -131,17 +131,31 @@ class FinnaApiClient {
       headers["Authorization"] = `Bearer ${this.token}`
     }
 
-    const res = await fetch(url, { ...options, headers })
-    if (!res.ok) {
-      const errorText = await res.text()
-      throw new Error(`API error ${res.status}: ${errorText}`)
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 6000)
+
+    try {
+      const res = await fetch(url, { ...options, headers, signal: options.signal || controller.signal })
+      if (!res.ok) {
+        const errorText = await res.text()
+        let parsedMessage = errorText
+        try {
+          const json = JSON.parse(errorText)
+          parsedMessage = json.error || json.message || errorText
+        } catch {
+          parsedMessage = `API error ${res.status}: ${errorText}`
+        }
+        throw new Error(parsedMessage)
+      }
+      return res.json() as Promise<T>
+    } finally {
+      clearTimeout(timeoutId)
     }
-    return res.json() as Promise<T>
   }
 
   // Auth
   async requestOtp(phone: string) {
-    return this.request<{ message: string; phone: string }>("/auth/otp/request", {
+    return this.request<{ message: string; phone: string; mockOtp?: string }>("/auth/otp/request", {
       method: "POST",
       body: JSON.stringify({ phone })
     })
@@ -151,6 +165,20 @@ class FinnaApiClient {
     return this.request<{ session: any; user: ApiUser }>("/auth/otp/verify", {
       method: "POST",
       body: JSON.stringify({ phone, token })
+    })
+  }
+
+  async requestEmailOtp(email: string) {
+    return this.request<{ message: string; email: string; mockOtp?: string }>("/auth/otp/request", {
+      method: "POST",
+      body: JSON.stringify({ email })
+    })
+  }
+
+  async verifyEmailOtp(email: string, token: string) {
+    return this.request<{ session: any; user: ApiUser }>("/auth/otp/verify", {
+      method: "POST",
+      body: JSON.stringify({ email, token })
     })
   }
 
