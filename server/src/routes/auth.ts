@@ -110,7 +110,7 @@ authRouter.post("/otp/verify", async (req: Request, res: Response) => {
         return res.status(400).json({ error: error.message || "Invalid or expired verification code." })
       }
 
-      const authUser = data.user || {}
+      const authUser: any = data.user || {}
       const user = {
         id: authUser.id || `user-${Date.now()}`,
         email: normalizedEmail,

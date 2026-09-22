@@ -568,6 +568,85 @@ export interface Database {
           valid_to?: string
         }
       }
+      aa_consents: {
+        Row: {
+          id: string
+          user_id: string | null
+          consent_id: string
+          status: string
+          purpose: string | null
+          url: string | null
+          txnid: string | null
+          vpa: string | null
+          raw_response: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          consent_id: string
+          status?: string
+          purpose?: string | null
+          url?: string | null
+          txnid?: string | null
+          vpa?: string | null
+          raw_response?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          consent_id?: string
+          status?: string
+          purpose?: string | null
+          url?: string | null
+          txnid?: string | null
+          vpa?: string | null
+          raw_response?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      aa_data_sessions: {
+        Row: {
+          id: string
+          consent_id: string
+          session_id: string
+          status: string
+          fetched_at: string | null
+          user_id: string | null
+          error: string | null
+          raw_payload: Json | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          consent_id: string
+          session_id: string
+          status?: string
+          fetched_at?: string | null
+          user_id?: string | null
+          error?: string | null
+          raw_payload?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          consent_id?: string
+          session_id?: string
+          status?: string
+          fetched_at?: string | null
+          user_id?: string | null
+          error?: string | null
+          raw_payload?: Json | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
   }
 }

@@ -30,9 +30,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { mockAA } from "@/lib/aa/mock-aa"
-import { setuAA } from "@/lib/aa/setu-aa"
-import { AATransaction } from "@/lib/aa/interface"
+import { finnaApi } from "@/lib/api"
 import { createClient } from "@/lib/supabase/client"
 
 interface BankOption {
@@ -54,29 +52,36 @@ const SUPPORTED_BANKS: BankOption[] = [
 ]
 
 const AA_PROVIDERS = [
-  { id: "setu", name: "Setu AA", license: "RBI NBFC-AA 2021", tag: "Recommended" },
+  { id: "setu", name: "Setu AA", license: "RBI NBFC-AA 2021", tag: "Live Sandbox" },
   { id: "finvu", name: "Finvu AA", license: "RBI NBFC-AA 2020", tag: "Cookiejar" },
   { id: "anumati", name: "Anumati AA", license: "RBI NBFC-AA 2020", tag: "Perfios" },
   { id: "onemoney", name: "OneMoney AA", license: "RBI NBFC-AA 2019", tag: "Active" },
 ]
 
 export default function AccountAggregatorPage() {
-  const [step, setStep] = React.useState<"init" | "artefact" | "otp" | "decrypting" | "review" | "active">("init")
+  const [step, setStep] = React.useState<"init" | "artefact" | "webview" | "decrypting" | "review" | "active">("init")
   const [selectedBank, setSelectedBank] = React.useState<BankOption>(SUPPORTED_BANKS[0])
   const [selectedAA, setSelectedAA] = React.useState(AA_PROVIDERS[0])
   const [mobileNumber, setMobileNumber] = React.useState("9876543210")
-  const [fiTypes, setFiTypes] = React.useState<string[]>(["DEPOSIT"])
   const [dateRange, setDateRange] = React.useState<string>("90d")
-  const [otpValue, setOtpValue] = React.useState("")
-  const [selectedAccount, setSelectedAccount] = React.useState("acc_sbi_4921")
   const [isLoading, setIsLoading] = React.useState(false)
 
-  // Transaction mapping review state
-  const [transactions, setTransactions] = React.useState<AATransaction[]>([])
+  // Real Setu AA state
+  const [consentId, setConsentId] = React.useState<string>("")
+  const [consentUrl, setConsentUrl] = React.useState<string>("")
+  const [consentStatus, setConsentStatus] = React.useState<string>("PENDING")
+  const [configError, setConfigError] = React.useState<string | null>(null)
+  const [sessionId, setSessionId] = React.useState<string>("")
+
+  // Transactions & Accounts state
+  const [accounts, setAccounts] = React.useState<any[]>([])
+  const [transactions, setTransactions] = React.useState<any[]>([])
   const [activeConsent, setActiveConsent] = React.useState<any>(null)
   const [syncStatusText, setSyncStatusText] = React.useState("")
 
-  // Load existing active consent from localStorage on initial render
+  const vpaHandle = `${mobileNumber}@${selectedAA.id}`
+
+  // Load existing active consent from localStorage
   React.useEffect(() => {
     try {
       const saved = localStorage.getItem("finna_active_aa_consent")
@@ -90,116 +95,140 @@ export default function AccountAggregatorPage() {
     }
   }, [])
 
-  const vpaHandle = `${mobileNumber}@${selectedAA.id}`
-  const consentId = React.useMemo(() => `AA-${selectedAA.id.toUpperCase()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`, [selectedAA])
+  // Poll Setu Consent Status every 3s when in webview step
+  React.useEffect(() => {
+    if (step !== "webview" || !consentId) return
 
-  // Step 1 -> Step 2: Review RBI Consent Artefact
-  const handleProceedToArtefact = () => {
-    setStep("artefact")
-  }
-
-  // Step 2 -> Step 3: Trigger AA Gateway OTP & Account Selection
-  const handleProceedToOTP = () => {
-    setStep("otp")
-  }
-
-  // Step 3 -> Step 4 & 5: Approve OTP, Decrypt FI Payload & Show Statement Review
-  const handleAuthorizeOTP = async () => {
-    setIsLoading(true)
-    setStep("decrypting")
-    setSyncStatusText("Establishing Diffie-Hellman (ECDH Curve25519) cryptographic channel...")
-
-    setTimeout(() => {
-      setSyncStatusText(`Querying ${selectedBank.name} (${selectedBank.fipId}) via ${selectedAA.name}...`)
-    }, 800)
-
-    setTimeout(() => {
-      setSyncStatusText("Retrieving encrypted JWE financial statement payload...")
-    }, 1600)
-
-    setTimeout(async () => {
+    let isMounted = true
+    const interval = setInterval(async () => {
       try {
-        const provider = mockAA
-        const res = await provider.createConsent({
-          userId: "user-current",
-          vpa: vpaHandle,
-          fiTypes,
-          dateRangeFrom: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
-          dateRangeTo: new Date().toISOString(),
-        })
+        const statusRes = await finnaApi.getAAConsentStatus(consentId)
+        if (!isMounted) return
 
-        const session = await provider.requestFIData(res.id)
-        const data = await provider.fetchFIData(session.sessionId)
-        setTransactions(data.transactions)
-        
-        const consentData = {
-          consentHandle: consentId,
-          provider: selectedAA.name,
-          bank: selectedBank.name,
-          fipId: selectedBank.fipId,
-          accountEnding: "4921",
-          status: "APPROVED",
-          validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
-          lastSynced: "Just now",
+        setConsentStatus(statusRes.status)
+
+        if (statusRes.status === "ACTIVE" || statusRes.status === "APPROVED") {
+          clearInterval(interval)
+          handleConsentApproved(consentId)
+        } else if (statusRes.status === "REJECTED" || statusRes.status === "EXPIRED" || statusRes.status === "FAILED") {
+          clearInterval(interval)
+          setConfigError(`Consent was ${statusRes.status.toLowerCase()} by user or provider. You can retry with a new request.`)
         }
-        setActiveConsent(consentData)
-        setStep("review")
-      } catch (err) {
-        console.error("AA handshake error:", err)
-        setStep("init")
-      } finally {
-        setIsLoading(false)
+      } catch (err: any) {
+        console.warn("[AA Status Polling]", err.message)
       }
-    }, 2400)
+    }, 3000)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
+  }, [step, consentId])
+
+  // Step 1: Trigger Setu Consent Creation
+  const handleCreateSetuConsent = async () => {
+    setIsLoading(true)
+    setConfigError(null)
+
+    try {
+      const res = await finnaApi.createAAConsent({
+        phone: mobileNumber,
+        vpa: vpaHandle,
+        purpose: "Personal Finance Management"
+      })
+
+      setConsentId(res.consentId)
+      setConsentStatus(res.status)
+      setConsentUrl(res.url || `https://fiu-sandbox.setu.co/consents/${res.consentId}`)
+      setStep("webview")
+    } catch (err: any) {
+      console.error("Create consent error:", err)
+      if (err.missingConfig || err.status === 503) {
+        setConfigError(
+          err.message ||
+          "Setu Sandbox Credentials Required: Please add SETU_CLIENT_ID, SETU_CLIENT_SECRET, and SETU_PRODUCT_INSTANCE_ID to your .env file."
+        )
+      } else {
+        setConfigError(`Failed to connect to Setu AA Sandbox: ${err.message}`)
+      }
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  // Step 5 -> Step 6: Commit Mappings to Database / Local Ledger
+  // Step 2: Handle Approved Consent -> Create Data Session & Fetch Data
+  const handleConsentApproved = async (approvedConsentId: string) => {
+    setStep("decrypting")
+    setIsLoading(true)
+    setSyncStatusText("Consent Approved! Creating Setu FI data session...")
+
+    try {
+      // 1. Create Data Session
+      const sessionRes = await finnaApi.createAASession(approvedConsentId)
+      const currentSessionId = sessionRes.sessionId
+      setSessionId(currentSessionId)
+
+      setSyncStatusText("Data session initialized. Fetching decrypted financial statement...")
+
+      // 2. Fetch Session Data
+      const fiData = await finnaApi.fetchAASessionData(currentSessionId)
+      setAccounts(fiData.accounts || [])
+      setTransactions(fiData.transactions || [])
+
+      const consentData = {
+        consentHandle: approvedConsentId,
+        provider: selectedAA.name,
+        bank: selectedBank.name,
+        fipId: selectedBank.fipId,
+        accountEnding: fiData.accounts[0]?.accountNumber || fiData.accounts[0]?.maskedAccount || "4921",
+        status: "APPROVED",
+        validUntil: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN", { month: "short", year: "numeric" }),
+        lastSynced: "Just now",
+      }
+      setActiveConsent(consentData)
+      setStep("review")
+    } catch (err: any) {
+      console.error("Session fetch error:", err)
+      setConfigError(`Data session failed: ${err.message}`)
+      setStep("init")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Demo fallback approval if keys not yet populated in .env
+  const handleSimulateApproval = () => {
+    const mockConsentId = `AA-SETU-DEMO-${Math.random().toString(36).substring(2, 8).toUpperCase()}`
+    setConsentId(mockConsentId)
+    handleConsentApproved(mockConsentId)
+  }
+
+  // Step 3: Commit Mappings to Database / Local Ledger
   const handleCommitMappings = async () => {
     setIsLoading(true)
     try {
-      // Save consent in localStorage for instant access
       if (activeConsent) {
         localStorage.setItem("finna_active_aa_consent", JSON.stringify(activeConsent))
       }
 
-      // If user is authenticated in Supabase, also save to real DB
+      // If user is authenticated in Supabase, sync data
       try {
         const supabase = createClient()
         const { data: { user } } = await supabase.auth.getUser()
 
         if (user) {
-          await supabase.from("consents").insert({
+          await supabase.from("aa_consents").upsert({
             user_id: user.id,
-            provider: selectedAA.id,
-            consent_ref: activeConsent?.consentHandle || consentId,
+            consent_id: activeConsent?.consentHandle || consentId,
             status: "APPROVED",
-            fi_types: fiTypes,
-          })
-
-          for (const tx of transactions) {
-            if (tx.type === "CREDIT" && tx.mappedPlatform) {
-              await supabase.from("income_entries").insert({
-                user_id: user.id,
-                platform: tx.mappedPlatform,
-                date: tx.date,
-                gross_amount: tx.amount,
-                source: "aa",
-                notes: tx.narration,
-              })
-            } else if (tx.type === "DEBIT") {
-              await supabase.from("expenses").insert({
-                user_id: user.id,
-                date: tx.date,
-                amount: tx.amount,
-                category: tx.categoryGuess || "General",
-                source: "aa",
-                notes: tx.narration,
-              })
-            }
-          }
+            purpose: "Personal Finance Management",
+            url: consentUrl,
+            vpa: vpaHandle,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "consent_id" as any })
         }
       } catch (dbErr) {
-        console.warn("Local demo commit (Supabase skipped or unauthenticated):", dbErr)
+        console.warn("Local storage fallback for guest mode:", dbErr)
       }
 
       setStep("active")
@@ -258,12 +287,49 @@ export default function AccountAggregatorPage() {
             </span>
           </div>
           <span className="font-mono text-[11px] text-[#737373] bg-white px-2 py-0.5 rounded border border-[#e5e5e5]">
-            RBI Master Direction DNBR.030
+            Setu AA Sandbox (fiu-sandbox.setu.co)
           </span>
         </div>
       </div>
 
       <main className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-8">
+        {/* Setu Sandbox Configuration Notice (if keys not in .env) */}
+        {configError && (
+          <div className="p-5 rounded-2xl border border-black bg-black text-white space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="size-5 text-white" />
+              <h3 className="font-bold text-sm">Setu Sandbox Configuration</h3>
+            </div>
+            <p className="text-xs text-[#a3a3a3] leading-relaxed">
+              {configError}
+            </p>
+            <div className="flex flex-wrap items-center gap-3 pt-1">
+              <a
+                href="https://bridge.setu.co"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-xs bg-white text-black font-semibold px-4 py-2 rounded-xl hover:bg-[#e5e5e5] transition"
+              >
+                Open Setu Bridge <ExternalLink className="size-3.5" />
+              </a>
+              <Button
+                variant="outline"
+                onClick={handleSimulateApproval}
+                className="border-white/40 text-white hover:bg-white/10 text-xs rounded-xl h-9"
+              >
+                Quick Demo (Simulate Approval)
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setConfigError(null)}
+                className="text-xs text-[#a3a3a3] hover:text-white h-9"
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* STEP 1: Bank & AA Discovery */}
         {step === "init" && (
           <section className="rounded-3xl border border-[#e5e5e5] bg-white p-6 sm:p-10 shadow-sm space-y-8">
@@ -272,7 +338,7 @@ export default function AccountAggregatorPage() {
                 Step 1 of 3 · Discovery
               </span>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-black mt-3">
-                Link Your Bank via RBI Account Aggregator
+                Link Your Bank via Setu Account Aggregator
               </h1>
               <p className="mt-2 text-sm text-[#737373] leading-relaxed">
                 Connect your primary gig payout bank account (Swiggy, Zomato, Uber, Zepto, Blinkit settlements) without sharing internet banking passwords or uploading PDF statements.
@@ -303,7 +369,7 @@ export default function AccountAggregatorPage() {
               </div>
             </div>
 
-            {/* Select RBI-licensed AA Gateway */}
+            {/* Select AA Gateway */}
             <div className="space-y-3">
               <label className="text-xs font-bold text-black uppercase tracking-wider block">
                 Choose Account Aggregator Gateway
@@ -404,7 +470,7 @@ export default function AccountAggregatorPage() {
             </div>
 
             <Button
-              onClick={handleProceedToArtefact}
+              onClick={() => setStep("artefact")}
               className="w-full h-12 rounded-xl bg-black text-white hover:bg-black/90 font-semibold cursor-pointer text-sm"
             >
               Review RBI Consent Artefact <ArrowRight className="size-4 ml-2" />
@@ -412,7 +478,7 @@ export default function AccountAggregatorPage() {
           </section>
         )}
 
-        {/* STEP 2: RBI Master Direction Consent Artefact Review */}
+        {/* STEP 2: RBI Consent Artefact Review */}
         {step === "artefact" && (
           <section className="rounded-3xl border border-[#e5e5e5] bg-white p-6 sm:p-10 shadow-sm space-y-6">
             <div>
@@ -423,15 +489,11 @@ export default function AccountAggregatorPage() {
                 Review Statutory Consent Terms
               </h2>
               <p className="mt-1 text-sm text-[#737373]">
-                Mandated by RBI Master Direction DNBR.030. Please review the exact permissions being granted.
+                Mandated by RBI Master Direction DNBR.030. Please review the exact permissions being granted before opening Setu's consent portal.
               </p>
             </div>
 
             <div className="rounded-2xl border border-[#e5e5e5] bg-[#fafafa] p-5 space-y-3.5 text-xs">
-              <div className="flex justify-between py-1.5 border-b border-[#e5e5e5]">
-                <span className="text-[#737373]">Consent Handle ID:</span>
-                <span className="font-mono font-bold text-black">{consentId}</span>
-              </div>
               <div className="flex justify-between py-1.5 border-b border-[#e5e5e5]">
                 <span className="text-[#737373]">Data Consumer (FIU):</span>
                 <span className="font-semibold text-black">FINNA Technologies Pvt Ltd (RBI Reg: 2026/FIU)</span>
@@ -442,11 +504,11 @@ export default function AccountAggregatorPage() {
               </div>
               <div className="flex justify-between py-1.5 border-b border-[#e5e5e5]">
                 <span className="text-[#737373]">Account Aggregator Gateway:</span>
-                <span className="font-semibold text-black">{selectedAA.name} (RBI Licensed)</span>
+                <span className="font-semibold text-black">{selectedAA.name} (Setu Sandbox API)</span>
               </div>
               <div className="flex justify-between py-1.5 border-b border-[#e5e5e5]">
                 <span className="text-[#737373]">Consent Purpose Code:</span>
-                <span className="font-semibold text-black">101 · Gig Income Reconciliation & Cashflow Smoothing</span>
+                <span className="font-semibold text-black">101 · Personal Finance Management & Cashflow Smoothing</span>
               </div>
               <div className="flex justify-between py-1.5 border-b border-[#e5e5e5]">
                 <span className="text-[#737373]">Data Requested:</span>
@@ -475,148 +537,120 @@ export default function AccountAggregatorPage() {
                 Back to Settings
               </Button>
               <Button
-                onClick={handleProceedToOTP}
+                onClick={handleCreateSetuConsent}
+                disabled={isLoading}
                 className="rounded-xl bg-black text-white hover:bg-black/90 h-11 px-6 font-semibold cursor-pointer text-xs"
               >
-                Accept & Proceed to AA Gateway <ArrowRight className="size-4 ml-2" />
+                {isLoading ? "Creating Setu Consent Request..." : "Connect to Setu AA Gateway →"}
               </Button>
             </div>
           </section>
         )}
 
-        {/* STEP 3: AA Gateway OTP & Account Selection */}
-        {step === "otp" && (
+        {/* STEP 3: Setu Hosted Consent Webview / Polling Modal */}
+        {step === "webview" && (
           <section className="rounded-3xl border border-[#e5e5e5] bg-white p-6 sm:p-10 shadow-sm space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-xs font-mono uppercase tracking-wider text-[#737373] bg-[#f5f5f5] px-3 py-1 rounded-full border border-[#e5e5e5]">
-                  Step 3 of 3 · AA Gateway Authentication
+                  Step 3 of 3 · Setu Hosted Webview
                 </span>
                 <h2 className="text-2xl font-bold tracking-tight text-black mt-3">
-                  {selectedAA.name} Secure Verification
+                  Awaiting Approval on Setu Screen
                 </h2>
                 <p className="mt-1 text-sm text-[#737373]">
-                  Enter the 6-digit OTP sent to <strong>+91 {mobileNumber}</strong> to discover accounts at {selectedBank.name}.
+                  Please approve the consent request on Setu's hosted portal. FINNA is actively listening for your confirmation.
                 </p>
               </div>
-              <span className="size-10 rounded-2xl bg-black text-white flex items-center justify-center font-bold text-xs">
-                AA
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="size-3 rounded-full bg-black animate-pulse" />
+                <span className="font-mono text-xs font-bold text-black uppercase">
+                  STATUS: {consentStatus}
+                </span>
+              </div>
             </div>
 
-            {/* OTP Input with Auto-Fill helper */}
-            <div className="space-y-3">
-              <label className="text-xs font-bold text-black uppercase tracking-wider block">
-                One-Time Password (OTP)
-              </label>
-              <div className="flex gap-3">
-                <Input
-                  value={otpValue}
-                  onChange={(e) => setOtpValue(e.target.value)}
-                  placeholder="Enter 6-digit OTP (or click Auto-Fill)"
-                  maxLength={6}
-                  className="h-12 bg-[#fafafa] border-[#e5e5e5] font-mono text-base tracking-widest text-center max-w-xs"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setOtpValue("849201")}
-                  className="h-12 rounded-xl border-[#e5e5e5] text-xs font-semibold cursor-pointer px-4"
+            <div className="p-4 rounded-2xl bg-[#fafafa] border border-[#e5e5e5] space-y-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-[#737373]">Consent ID:</span>
+                <span className="font-mono font-bold text-black">{consentId}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#737373]">Gateway URL:</span>
+                <a
+                  href={consentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono text-black underline truncate max-w-xs sm:max-w-md inline-flex items-center gap-1"
                 >
-                  Use Demo OTP: 849201
+                  {consentUrl} <ExternalLink className="size-3" />
+                </a>
+              </div>
+            </div>
+
+            {/* Embedded Webview Container */}
+            <div className="rounded-2xl border border-[#e5e5e5] bg-white overflow-hidden shadow-inner h-[440px] flex flex-col">
+              <div className="bg-[#f5f5f5] px-4 py-2 border-b border-[#e5e5e5] flex items-center justify-between text-xs text-[#737373]">
+                <div className="flex items-center gap-2">
+                  <Lock className="size-3.5 text-black" />
+                  <span className="font-mono text-[11px] text-black">fiu-sandbox.setu.co</span>
+                </div>
+                <a
+                  href={consentUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 font-semibold text-black hover:underline"
+                >
+                  Open in New Tab <ExternalLink className="size-3" />
+                </a>
+              </div>
+              <div className="flex-1 w-full bg-white relative">
+                <iframe
+                  src={consentUrl}
+                  title="Setu AA Hosted Consent Webview"
+                  className="w-full h-full border-0"
+                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                />
+              </div>
+            </div>
+
+            {/* Polling & Manual Simulation actions */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+              <div className="flex items-center gap-2 text-xs text-[#737373]">
+                <Loader2 className="size-3.5 animate-spin text-black" />
+                <span>Polling Setu status every 3 seconds...</span>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline"
+                  onClick={handleSimulateApproval}
+                  className="rounded-xl border-[#e5e5e5] text-xs h-10 px-4 cursor-pointer"
+                >
+                  Simulate Webview Approval
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setStep("init")}
+                  className="rounded-xl border-[#e5e5e5] text-xs h-10 px-4 cursor-pointer"
+                >
+                  Cancel
                 </Button>
               </div>
-            </div>
-
-            {/* Discovered Bank Accounts */}
-            <div className="space-y-3 pt-2">
-              <label className="text-xs font-bold text-black uppercase tracking-wider block">
-                Discovered Accounts at {selectedBank.name}
-              </label>
-              <div className="space-y-2.5">
-                {[
-                  {
-                    id: "acc_sbi_4921",
-                    accountType: "Regular Savings Account",
-                    number: "•••• •••• •••• 4921",
-                    balance: "₹42,681.40",
-                    isPrimary: true,
-                    note: "Detected as Primary Gig Payout Account (Swiggy, Uber)",
-                  },
-                  {
-                    id: "acc_sbi_1058",
-                    accountType: "Digital Current Account",
-                    number: "•••• •••• •••• 1058",
-                    balance: "₹8,420.00",
-                    isPrimary: false,
-                    note: "Secondary business account",
-                  },
-                ].map((acc) => (
-                  <label
-                    key={acc.id}
-                    className={`p-4 rounded-2xl border flex items-center justify-between cursor-pointer transition ${
-                      selectedAccount === acc.id
-                        ? "bg-black text-white border-black shadow-sm"
-                        : "bg-[#fafafa] text-black border-[#e5e5e5] hover:bg-[#f5f5f5]"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="radio"
-                        name="account_selection"
-                        checked={selectedAccount === acc.id}
-                        onChange={() => setSelectedAccount(acc.id)}
-                        className="accent-black size-4"
-                      />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm">{acc.accountType}</span>
-                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded ${
-                            selectedAccount === acc.id ? "bg-[#262626] text-white" : "bg-[#e5e5e5] text-black"
-                          }`}>
-                            {acc.number}
-                          </span>
-                        </div>
-                        <p className={`text-xs mt-0.5 ${selectedAccount === acc.id ? "text-[#a3a3a3]" : "text-[#737373]"}`}>
-                          {acc.note}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-sm font-bold font-mono">{acc.balance}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-4 border-t border-[#e5e5e5]">
-              <Button
-                variant="outline"
-                onClick={() => setStep("artefact")}
-                className="rounded-xl border-[#e5e5e5] h-11 px-5 cursor-pointer text-xs"
-              >
-                Back
-              </Button>
-              <Button
-                onClick={handleAuthorizeOTP}
-                disabled={isLoading}
-                className="rounded-xl bg-black text-white hover:bg-black/90 h-11 px-6 font-semibold cursor-pointer text-xs"
-              >
-                {isLoading ? "Authenticating..." : "Approve Consent & Fetch Statements"}
-              </Button>
             </div>
           </section>
         )}
 
-        {/* STEP 4: Decrypting & Cryptographic Handshake */}
+        {/* STEP 4: Creating Session & Decrypting */}
         {step === "decrypting" && (
           <section className="rounded-3xl border border-[#e5e5e5] bg-white p-12 text-center shadow-sm space-y-5">
             <Loader2 className="size-10 animate-spin mx-auto text-black" />
-            <h2 className="text-xl font-bold text-black">Connecting to Account Aggregator Gateway...</h2>
+            <h2 className="text-xl font-bold text-black">Fetching Real Bank Statement from Setu Session...</h2>
             <p className="text-xs font-mono text-[#737373] max-w-md mx-auto bg-[#f5f5f5] p-3 rounded-xl border border-[#e5e5e5]">
               {syncStatusText}
             </p>
             <p className="text-[11px] text-[#a3a3a3]">
-              Using end-to-end asymmetric cryptography (Curve25519 ECDH + AES-256 GCM).
+              Communicating with Setu FI data session endpoints (`/v2/sessions`).
             </p>
           </section>
         )}
@@ -641,10 +675,25 @@ export default function AccountAggregatorPage() {
               </span>
             </div>
 
+            {/* Account Balance Summary */}
+            {accounts.length > 0 && (
+              <div className="grid sm:grid-cols-2 gap-3">
+                {accounts.map((acc, idx) => (
+                  <div key={idx} className="p-4 rounded-2xl border border-[#e5e5e5] bg-[#fafafa] flex justify-between items-center text-xs">
+                    <div>
+                      <span className="font-bold text-black block">{acc.bank || selectedBank.name}</span>
+                      <span className="text-[#737373]">{acc.accountType || acc.type || "Savings"} ({acc.maskedAccount || acc.accountNumber})</span>
+                    </div>
+                    <span className="font-bold font-mono text-sm">₹{Number(acc.balance || 0).toLocaleString("en-IN")}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
-              {transactions.map((tx) => (
+              {transactions.map((tx, idx) => (
                 <div
-                  key={tx.txnId}
+                  key={tx.txnId || idx}
                   className="p-4 rounded-2xl border border-[#e5e5e5] bg-[#fafafa] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                 >
                   <div className="space-y-1">
@@ -658,17 +707,17 @@ export default function AccountAggregatorPage() {
                       >
                         {tx.type}
                       </span>
-                      <span className="font-semibold text-black">{tx.narration}</span>
+                      <span className="font-semibold text-black">{tx.description || tx.narration}</span>
                     </div>
-                    <p className="text-[#737373]">Date: {tx.date} · Detected Category: {tx.categoryGuess}</p>
+                    <p className="text-[#737373]">Date: {tx.date} · Detected Category: {tx.category || tx.categoryGuess}</p>
                   </div>
 
                   <div className="flex items-center gap-4 sm:self-center">
                     <span className={`font-bold text-sm font-mono ${tx.type === "CREDIT" ? "text-black" : "text-[#525252]"}`}>
-                      {tx.type === "CREDIT" ? "+" : "-"}₹{tx.amount.toLocaleString("en-IN")}
+                      {tx.type === "CREDIT" ? "+" : "-"}₹{Number(tx.amount || 0).toLocaleString("en-IN")}
                     </span>
                     <span className="text-[11px] font-bold text-black bg-white px-2.5 py-1 rounded-lg border border-[#e5e5e5]">
-                      {tx.mappedPlatform ? `Platform: ${tx.mappedPlatform.toUpperCase()}` : tx.categoryGuess}
+                      {tx.platform || tx.mappedPlatform ? `Platform: ${(tx.platform || tx.mappedPlatform).toUpperCase()}` : (tx.category || tx.categoryGuess)}
                     </span>
                   </div>
                 </div>
@@ -707,7 +756,7 @@ export default function AccountAggregatorPage() {
                     Active Account Aggregator Consent
                   </h2>
                   <p className="text-xs text-[#737373]">
-                    Your bank statement is synced. Daily automated refresh active.
+                    Your bank statement is synced via Setu AA Sandbox. Daily automated refresh active.
                   </p>
                 </div>
               </div>
@@ -718,12 +767,12 @@ export default function AccountAggregatorPage() {
 
             <div className="p-5 rounded-2xl bg-[#fafafa] border border-[#e5e5e5] space-y-3.5 text-xs">
               <div className="flex justify-between py-1.5 border-b border-[#e5e5e5]">
-                <span className="text-[#737373]">Consent Handle:</span>
+                <span className="text-[#737373]">Consent Handle / ID:</span>
                 <span className="font-mono text-black font-bold">{activeConsent?.consentHandle || consentId}</span>
               </div>
               <div className="flex justify-between py-1.5 border-b border-[#e5e5e5]">
                 <span className="text-[#737373]">Account Aggregator Gateway:</span>
-                <span className="text-black font-semibold">{activeConsent?.provider || selectedAA.name} (RBI Licensed)</span>
+                <span className="text-black font-semibold">Setu AA (https://fiu-sandbox.setu.co)</span>
               </div>
               <div className="flex justify-between py-1.5 border-b border-[#e5e5e5]">
                 <span className="text-[#737373]">Linked Bank (FIP):</span>
@@ -731,7 +780,7 @@ export default function AccountAggregatorPage() {
               </div>
               <div className="flex justify-between py-1.5 border-b border-[#e5e5e5]">
                 <span className="text-[#737373]">Data Purpose:</span>
-                <span className="text-black font-semibold">Code 101 · Personal Financial Management & Gig Income Reconciliation</span>
+                <span className="text-black font-semibold">Code 101 · Personal Finance Management & Cashflow Smoothing</span>
               </div>
               <div className="flex justify-between py-1.5 border-b border-[#e5e5e5]">
                 <span className="text-[#737373]">Last Successful Sync:</span>

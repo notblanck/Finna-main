@@ -44,6 +44,18 @@ export class MockAAService implements AccountAggregatorService {
     return true
   }
 
+  async createDataSession(consentId: string): Promise<any> {
+    return {
+      sessionId: `SESSION-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+      status: "COMPLETED",
+      consentId
+    }
+  }
+
+  async fetchSessionData(sessionId: string): Promise<AADataFetchResult> {
+    return this.fetchFinancialData("mock-consent")
+  }
+
   async fetchFinancialData(consentId: string): Promise<AADataFetchResult> {
     const accounts: AAAccount[] = [
       {

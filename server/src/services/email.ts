@@ -8,9 +8,9 @@ interface SendOtpEmailOptions {
   otp: string
 }
 
-let cachedTransporter: nodemailer.Transporter | null = null
+let cachedTransporter: any = null
 
-async function getTransporter(): Promise<nodemailer.Transporter> {
+async function getTransporter(): Promise<any> {
   if (cachedTransporter) return cachedTransporter
 
   const host = process.env.SMTP_HOST

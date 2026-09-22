@@ -1,149 +1,313 @@
 import { AAProvider, CreateConsentParams, ConsentResponse, FIDataSessionResponse, AATransaction } from "./interface"
 
+export class SetuConfigurationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "SetuConfigurationError"
+  }
+}
+
 export class SetuAAProvider implements AAProvider {
-  name = "Setu AA Sandbox"
+  name = "Setu AA Sandbox (Real API)"
   isSandbox = true
 
-  private baseUrl = process.env.SETU_BASE_URL || "https://fiu-sandbox.setu.co"
-  private clientId = process.env.SETU_CLIENT_ID || "a65e4f6e-d1ad-4ea5-b640-f2336eac02dd"
-  private clientSecret = process.env.SETU_CLIENT_SECRET || "YJdjFgEH2SKdEUleF8yoEs6XPPkLzezZ"
-  private productInstanceId = process.env.SETU_PRODUCT_INSTANCE_ID || "d7fb6317-8529-4e7d-8f0d-baae99781166"
+  private baseUrl = (process.env.SETU_AA_BASE_URL || process.env.SETU_BASE_URL || "https://fiu-sandbox.setu.co").replace(/\/$/, "")
+  private authUrl = process.env.SETU_AUTH_URL || "https://accountservice.setu.co/v1/users/login"
+  private fiuId = process.env.SETU_FIU_ID || ""
+  private clientId = process.env.SETU_CLIENT_ID || ""
+  private clientSecret = process.env.SETU_CLIENT_SECRET || ""
+  private productInstanceId = process.env.SETU_PRODUCT_INSTANCE_ID || ""
+  private cachedToken: string | null = null
+  private tokenExpiresAt: number = 0
 
-  private getHeaders(): Record<string, string> {
-    return {
+  public validateConfiguration(): void {
+    const missing: string[] = []
+    if (!this.clientId) missing.push("SETU_CLIENT_ID")
+    if (!this.clientSecret) missing.push("SETU_CLIENT_SECRET")
+    if (!this.productInstanceId) missing.push("SETU_PRODUCT_INSTANCE_ID")
+
+    if (missing.length > 0) {
+      throw new SetuConfigurationError(
+        `Setu AA Sandbox credentials missing: [${missing.join(", ")}]. ` +
+        `Please register at https://bridge.setu.co, create a sandbox product instance under Account Aggregator, ` +
+        `and configure these variables in your .env file.`
+      )
+    }
+  }
+
+  private async getAccessToken(): Promise<string> {
+    if (this.cachedToken && Date.now() < this.tokenExpiresAt - 60000) {
+      return this.cachedToken
+    }
+
+    this.validateConfiguration()
+
+    const res = await fetch(this.authUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        clientID: this.clientId,
+        secret: this.clientSecret,
+        grant_type: "client_credentials"
+      })
+    })
+
+    if (!res.ok) {
+      const errText = await res.text()
+      throw new Error(`Failed to authenticate with Setu Account Service (${res.status}): ${errText}`)
+    }
+
+    const data = await res.json()
+    this.cachedToken = data.access_token
+    const validFor = (data.expiresIn || 1800) * 1000
+    this.tokenExpiresAt = Date.now() + validFor
+
+    return data.access_token
+  }
+
+  private async getHeaders(): Promise<Record<string, string>> {
+    const token = await this.getAccessToken()
+    const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
       "x-client-id": this.clientId,
-      "x-client-secret": this.clientSecret,
       "x-product-instance-id": this.productInstanceId,
     }
+
+    if (this.fiuId) {
+      headers["x-fiu-id"] = this.fiuId
+    }
+
+    return headers
   }
 
   async createConsent(params: CreateConsentParams): Promise<ConsentResponse> {
-    try {
-      const res = await fetch(`${this.baseUrl}/consents`, {
-        method: "POST",
-        headers: this.getHeaders(),
-        body: JSON.stringify({
-          Customer: { id: params.vpa || `${params.phone || "9876543210"}@setu` },
-          FIDataRange: {
-            from: params.dateRangeFrom,
-            to: params.dateRangeTo,
-          },
-          consentMode: "VIEW",
-          consentTypes: ["TRANSACTIONS", "PROFILE", "SUMMARY"],
-          fetchType: "PERIODIC",
-          Frequency: { unit: "MONTH", value: 1 },
-          DataLife: { unit: "MONTH", value: 12 },
-          DataConsumer: { id: "setu-fiu-id" },
-          Purpose: {
-            code: "101",
-            refUri: "https://api.rebit.org.in/aa/purpose/101.xml",
-            text: "Wealth management and gig financial forecasting",
-            Category: { type: "Financial Advisory" },
-          },
-          fiTypes: params.fiTypes.length > 0 ? params.fiTypes : ["DEPOSIT"],
-        }),
-      })
+    this.validateConfiguration()
+    const headers = await this.getHeaders()
 
-      const data = await res.json()
-      if (!res.ok) {
-        throw new Error(data.message || "Failed to create Setu consent")
-      }
+    const vpa = params.vpa || (params.phone ? `${params.phone.replace(/^\+91/, '')}@setu` : "9876543210@setu")
+    const now = new Date()
+    const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
-      return {
-        id: data.id || `consent-${Date.now()}`,
-        consentHandle: data.handle || data.id,
-        status: data.status || "PENDING",
-        redirectUrl: data.url || `https://fiu-sandbox.setu.co/consents/${data.id}`,
-        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      }
-    } catch (err) {
-      console.warn("Setu AA Sandbox unavailable, falling back to mock approval:", err)
-      return {
-        id: `setu-sandbox-${Date.now()}`,
-        consentHandle: `handle-${Date.now()}`,
-        status: "APPROVED",
-        redirectUrl: `/aa?mockApproved=true`,
-        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      }
+    const payload = {
+      Customer: { id: vpa },
+      vua: vpa,
+      FIDataRange: {
+        from: params.dateRangeFrom || ninetyDaysAgo.toISOString(),
+        to: params.dateRangeTo || now.toISOString(),
+      },
+      dataRange: {
+        from: params.dateRangeFrom || ninetyDaysAgo.toISOString(),
+        to: params.dateRangeTo || now.toISOString(),
+      },
+      consentMode: "STORE",
+      consentTypes: ["TRANSACTIONS", "PROFILE", "SUMMARY"],
+      fetchType: "PERIODIC",
+      Frequency: { unit: "DAY", value: 1 },
+      DataLife: { unit: "MONTH", value: 12 },
+      DataConsumer: { id: this.fiuId || "setu-fiu-id" },
+      Purpose: {
+        code: "101",
+        refUri: "https://api.rebit.org.in/aa/purpose/101.xml",
+        text: "Personal Finance Management",
+        Category: { type: "Financial Advisory" },
+      },
+      fiTypes: params.fiTypes?.length ? params.fiTypes : ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"],
     }
+
+    const res = await fetch(`${this.baseUrl}/v2/consents`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(payload),
+    })
+
+    const data = await res.json()
+    if (!res.ok) {
+      const msg = data.errorMsg || data.message || JSON.stringify(data)
+      throw new Error(`Setu Create Consent API Error (${res.status}): ${msg}`)
+    }
+
+    const consentId = data.id || data.consentId || data.consentCollectionId
+    const redirectUrl = data.url || data.redirectUrl || `${this.baseUrl}/consents/${consentId}`
+
+    return {
+      id: consentId,
+      consentHandle: data.handle || data.txnid || consentId,
+      status: data.status || "PENDING",
+      redirectUrl,
+      expiresAt: data.consentExpiry || oneYearFromNow.toISOString(),
+      raw: data,
+    } as any
   }
 
   async getConsentStatus(consentId: string): Promise<ConsentResponse> {
-    try {
-      const res = await fetch(`${this.baseUrl}/consents/${consentId}`, {
-        method: "GET",
-        headers: this.getHeaders(),
-      })
-      const data = await res.json()
-      return {
-        id: data.id || consentId,
-        consentHandle: data.handle || consentId,
-        status: data.status || "APPROVED",
-        expiresAt: data.expireTime || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      }
-    } catch {
-      return {
-        id: consentId,
-        consentHandle: consentId,
-        status: "APPROVED",
-        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      }
+    this.validateConfiguration()
+    const headers = await this.getHeaders()
+
+    const res = await fetch(`${this.baseUrl}/v2/consents/${consentId}`, {
+      method: "GET",
+      headers,
+    })
+
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(`Setu Get Consent Status Error (${res.status}): ${data.message || data.errorMsg || res.statusText}`)
     }
+
+    return {
+      id: data.id || consentId,
+      consentHandle: data.handle || data.txnid || consentId,
+      status: data.status || "PENDING",
+      redirectUrl: data.url || data.redirectUrl,
+      expiresAt: data.consentExpiry || data.expireTime || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      raw: data,
+    } as any
   }
 
   async revokeConsent(consentId: string): Promise<{ success: boolean; status: string }> {
-    try {
-      await fetch(`${this.baseUrl}/consents/${consentId}/revoke`, {
-        method: "POST",
-        headers: this.getHeaders(),
-      })
-      return { success: true, status: "REVOKED" }
-    } catch {
-      return { success: true, status: "REVOKED" }
-    }
+    this.validateConfiguration()
+    const headers = await this.getHeaders()
+
+    const res = await fetch(`${this.baseUrl}/v2/consents/${consentId}/revoke`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({}),
+    })
+
+    return { success: res.ok, status: "REVOKED" }
   }
 
-  async requestFIData(consentId: string): Promise<FIDataSessionResponse> {
-    return {
-      sessionId: `setu-session-${Date.now()}`,
-      status: "COMPLETED",
+  async createDataSession(consentId: string, options?: { from?: string; to?: string }): Promise<FIDataSessionResponse> {
+    this.validateConfiguration()
+    const headers = await this.getHeaders()
+
+    const now = new Date()
+    const fromDate = options?.from || new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
+    const toDate = options?.to || now.toISOString()
+
+    const res = await fetch(`${this.baseUrl}/v2/sessions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        consentId,
+        format: "json",
+        dataRange: { from: fromDate, to: toDate },
+      }),
+    })
+
+    const data = await res.json()
+    if (!res.ok) {
+      throw new Error(`Setu Create Session Error (${res.status}): ${data.message || data.errorMsg || res.statusText}`)
     }
+
+    return {
+      sessionId: data.id || data.sessionId,
+      status: data.status || "PENDING",
+      raw: data,
+    } as any
+  }
+
+  async fetchSessionData(sessionId: string): Promise<{ accounts: any[]; transactions: AATransaction[]; raw?: any }> {
+    this.validateConfiguration()
+    const headers = await this.getHeaders()
+
+    const res = await fetch(`${this.baseUrl}/v2/sessions/${sessionId}`, {
+      method: "GET",
+      headers,
+    })
+
+    const payload = await res.json()
+    if (!res.ok) {
+      throw new Error(`Setu Fetch Session Data Error (${res.status}): ${payload.message || payload.errorMsg || res.statusText}`)
+    }
+
+    const accounts: any[] = []
+    const transactions: AATransaction[] = []
+
+    const fipList = payload.Payload || payload.payload || (Array.isArray(payload) ? payload : [payload])
+
+    for (const fipData of fipList) {
+      const fipId = fipData.fipId || "FIP-BANK"
+      const accList = fipData.data?.account || fipData.accounts || fipData.account || []
+      const normAccs = Array.isArray(accList) ? accList : [accList]
+
+      for (const acc of normAccs) {
+        if (!acc) continue
+
+        const holderName = acc.profile?.holders?.holder?.[0]?.name || fipId
+        const accountType = acc.summary?.type || "Savings"
+        const maskedAccount = acc.maskedAccNumber || acc.maskedAccountNumber || "XXXXXX0000"
+        const balance = parseFloat(acc.summary?.currentBalance || "0") || 0
+
+        accounts.push({
+          bank: holderName,
+          type: accountType,
+          accountNumber: maskedAccount,
+          balance,
+          fipId,
+        })
+
+        const txnList = acc.transactions?.transaction || acc.transactions || []
+        const normTxns = Array.isArray(txnList) ? txnList : [txnList]
+
+        for (const txn of normTxns) {
+          if (!txn) continue
+          const narration = txn.narration || txn.description || "Bank Transaction"
+          const amount = parseFloat(txn.amount || "0") || 0
+          const rawType = (txn.type || "DEBIT").toUpperCase()
+          const type: "CREDIT" | "DEBIT" = rawType.includes("CREDIT") || rawType === "CR" ? "CREDIT" : "DEBIT"
+
+          let mappedPlatform: string | undefined
+          let categoryGuess = type === "CREDIT" ? "Gig Income" : "General Expense"
+          const lower = narration.toLowerCase()
+
+          if (lower.includes("swiggy") || lower.includes("bundl")) {
+            mappedPlatform = "swiggy"
+            categoryGuess = "Gig Income"
+          } else if (lower.includes("zomato")) {
+            mappedPlatform = "zomato"
+            categoryGuess = "Gig Income"
+          } else if (lower.includes("uber")) {
+            mappedPlatform = "uber"
+            categoryGuess = "Gig Income"
+          } else if (lower.includes("rapido")) {
+            mappedPlatform = "rapido"
+            categoryGuess = "Gig Income"
+          } else if (lower.includes("zepto")) {
+            mappedPlatform = "zepto"
+            categoryGuess = "Gig Income"
+          } else if (lower.includes("blinkit")) {
+            mappedPlatform = "blinkit"
+            categoryGuess = "Gig Income"
+          } else if (lower.includes("petrol") || lower.includes("fuel") || lower.includes("iocl") || lower.includes("bpcl")) {
+            categoryGuess = "Fuel"
+          }
+
+          transactions.push({
+            txnId: txn.txnId || txn.referenceNumber || `txn-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            date: txn.transactionTimestamp?.slice(0, 10) || txn.date?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+            amount,
+            type,
+            narration,
+            balanceAfter: parseFloat(txn.currentBalance || txn.balanceAfter || "0") || 0,
+            categoryGuess,
+            mappedPlatform,
+          })
+        }
+      }
+    }
+
+    return { accounts, transactions, raw: payload }
+  }
+
+  // Backwards compatibility helper
+  async requestFIData(consentId: string): Promise<FIDataSessionResponse> {
+    return this.createDataSession(consentId)
   }
 
   async fetchFIData(sessionId: string): Promise<{ accounts: any[]; transactions: AATransaction[] }> {
-    return {
-      accounts: [
-        {
-          accountNumber: "•••• 2841",
-          bank: "State Bank of India (Setu Sandbox)",
-          type: "SAVINGS",
-          balance: 42680.50,
-        }
-      ],
-      transactions: [
-        {
-          txnId: "setu-tx-01",
-          date: "2026-09-20",
-          amount: 1820.00,
-          type: "CREDIT",
-          narration: "UPI/UBER INDIA SYSTEMS PVT/WEEKLY-PAYOUT",
-          balanceAfter: 42680.50,
-          categoryGuess: "Gig Income",
-          mappedPlatform: "uber",
-        },
-        {
-          txnId: "setu-tx-02",
-          date: "2026-09-19",
-          amount: 450.00,
-          type: "DEBIT",
-          narration: "POS/IOCL PETROL PUMP ANNA NAGAR/CHENNAI",
-          balanceAfter: 40860.50,
-          categoryGuess: "Fuel",
-          mappedPlatform: undefined,
-        },
-      ]
-    }
+    return this.fetchSessionData(sessionId)
   }
 
   async handleWebhook(payload: any): Promise<{ handled: boolean; event: string }> {

@@ -16,6 +16,7 @@ import { marketplaceRouter } from "./routes/marketplace.js"
 import { privilegesRouter } from "./routes/privileges.js"
 import { cashflowRouter } from "./routes/cashflow.js"
 import { profileRouter } from "./routes/profile.js"
+import { aaRouter } from "./routes/aa.js"
 import { aaService } from "./services/aa/index.js"
 
 dotenv.config()
@@ -54,6 +55,8 @@ app.use("/api/v1/health-score", marketplaceRouter) // TRD §3 endpoint direct al
 app.use("/api/v1/privileges", privilegesRouter)
 app.use("/api/v1/cashflow", cashflowRouter)
 app.use("/api/v1/profile", profileRouter)
+app.use("/api/aa", aaRouter)
+app.use("/api/v1/aa", aaRouter)
 
 // Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
