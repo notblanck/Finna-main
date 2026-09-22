@@ -2,7 +2,7 @@ import { AccountAggregatorService } from "./interface.js"
 import { MockAAService } from "./mock-aa.js"
 import { SetuAAService } from "./setu-aa.js"
 
-const useMock = process.env.USE_MOCK_AA !== "false"
+const useMock = process.env.USE_MOCK_AA === "true"
 
 export const aaService: AccountAggregatorService = useMock
   ? new MockAAService()

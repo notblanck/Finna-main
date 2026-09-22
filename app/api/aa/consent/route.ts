@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { setuAA, SetuConfigurationError } from "@/lib/aa/setu-aa"
 import { createClient } from "@/lib/supabase/server"
+import { proxyToBackend, isCloudflareBlock } from "@/lib/aa/proxy"
 
 export async function POST(request: Request) {
   try {
@@ -30,6 +31,23 @@ export async function POST(request: Request) {
           docs: "https://bridge.setu.co"
         }, { status: 503 })
       }
+
+      // Fallback: proxy through Express backend if Setu blocked this IP (403 / Cloudflare WAF)
+      if (isCloudflareBlock(apiErr)) {
+        console.log("[Next.js AA Consent] Setu WAF block detected, proxying through Express backend...")
+        try {
+          const proxyRes = await proxyToBackend("/consent", {
+            method: "POST",
+            body: JSON.stringify({ phone, vpa, purpose, fiTypes: body.fiTypes })
+          })
+          const proxyJson = await proxyRes.json()
+          return NextResponse.json(proxyJson, { status: proxyRes.status })
+        } catch (proxyErr: any) {
+          console.error("[Next.js AA Consent] Proxy fallback also failed:", proxyErr.message)
+          throw apiErr // re-throw original error
+        }
+      }
+
       throw apiErr
     }
 

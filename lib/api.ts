@@ -328,58 +328,33 @@ class FinnaApiClient {
     return this.request<{ budgets: any[] }>("/budgets")
   }
 
-  // Setu AA Integration
+  // Setu AA Integration — routed through Express backend (Indian IP) to avoid Vercel 403
   async createAAConsent(data: { phone?: string; vpa?: string; purpose?: string }) {
-    const res = await fetch("/api/aa/consent", {
+    return this.request<{ success: boolean; consentId: string; status: string; url?: string; txnid?: string }>("/aa/consent", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
     })
-    const json = await res.json()
-    if (!res.ok) {
-      const err: any = new Error(json.message || json.error || "Failed to create Setu consent")
-      err.missingConfig = json.missingConfig
-      err.status = res.status
-      throw err
-    }
-    return json as { success: boolean; consentId: string; status: string; url?: string; txnid?: string }
   }
 
   async getAAConsentStatus(consentId: string) {
-    const res = await fetch(`/api/aa/consent/${consentId}/status`)
-    const json = await res.json()
-    if (!res.ok) {
-      throw new Error(json.message || json.error || "Failed to get consent status")
-    }
-    return json as { success: boolean; consentId: string; status: string; url?: string }
+    return this.request<{ success: boolean; consentId: string; status: string; url?: string }>(`/aa/consent/${consentId}/status`)
   }
 
   async createAASession(consentId: string) {
-    const res = await fetch("/api/aa/session", {
+    return this.request<{ success: boolean; sessionId: string; status: string; consentId: string }>("/aa/session", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ consentId })
     })
-    const json = await res.json()
-    if (!res.ok) {
-      throw new Error(json.message || json.error || "Failed to create data session")
-    }
-    return json as { success: boolean; sessionId: string; status: string; consentId: string }
   }
 
   async fetchAASessionData(sessionId: string) {
-    const res = await fetch(`/api/aa/session/${sessionId}`)
-    const json = await res.json()
-    if (!res.ok) {
-      throw new Error(json.message || json.error || "Failed to fetch session data")
-    }
-    return json as {
+    return this.request<{
       success: boolean
       sessionId: string
       accounts: any[]
       transactions: any[]
       dbSync?: any
-    }
+    }>(`/aa/session/${sessionId}`)
   }
 }
 
