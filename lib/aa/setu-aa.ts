@@ -91,27 +91,11 @@ export class SetuAAProvider implements AAProvider {
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
     const payload = {
-      Customer: { id: vpa },
-      vua: vpa,
-      FIDataRange: {
-        from: params.dateRangeFrom || ninetyDaysAgo.toISOString(),
-        to: params.dateRangeTo || now.toISOString(),
-      },
+      vua,
+      consentDuration: { unit: "MONTH", value: "12" },
       dataRange: {
         from: params.dateRangeFrom || ninetyDaysAgo.toISOString(),
         to: params.dateRangeTo || now.toISOString(),
-      },
-      consentMode: "STORE",
-      consentTypes: ["TRANSACTIONS", "PROFILE", "SUMMARY"],
-      fetchType: "PERIODIC",
-      Frequency: { unit: "DAY", value: 1 },
-      DataLife: { unit: "MONTH", value: 12 },
-      DataConsumer: { id: this.fiuId || "setu-fiu-id" },
-      Purpose: {
-        code: "101",
-        refUri: "https://api.rebit.org.in/aa/purpose/101.xml",
-        text: "Personal Finance Management",
-        Category: { type: "Financial Advisory" },
       },
       fiTypes: params.fiTypes?.length ? params.fiTypes : ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"],
     }

@@ -151,28 +151,13 @@ export class SetuAAService implements AccountAggregatorService {
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
     const payload = {
-      Customer: {
-        id: vpaOrPhone
-      },
       vua: vpaOrPhone,
-      consentDuration: { unit: "MONTH", value: 12 },
-      consentTypes: ["TRANSACTIONS", "PROFILE", "SUMMARY"],
-      fiTypes: ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"],
+      consentDuration: { unit: "MONTH", value: "12" },
       dataRange: {
         from: params.dateRangeFrom || ninetyDaysAgo.toISOString(),
         to: params.dateRangeTo || now.toISOString()
       },
-      dataLife: { unit: "MONTH", value: 12 },
-      frequency: { unit: "DAY", value: 1 },
-      dataFilter: [{ type: "TRANSACTIONAMOUNT", operator: ">=", value: "0" }],
-      consentMode: "STORE",
-      fetchType: "PERIODIC",
-      Purpose: {
-        code: "101",
-        text: params.purpose || "Personal Finance Management",
-        refUri: "https://api.rebit.org.in/aa/purpose/101.xml",
-        category: { type: "string" }
-      }
+      fiTypes: ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"]
     }
 
     try {
