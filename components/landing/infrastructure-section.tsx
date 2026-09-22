@@ -86,8 +86,8 @@ export function InfrastructureSection() {
               {/* Header */}
               <div className="px-6 py-4 border-b border-foreground/10 flex items-center justify-between">
                 <span className="text-sm font-mono text-muted-foreground">Edge Network</span>
-                <span className="flex items-center gap-2 text-xs font-mono text-green-600">
-                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="flex items-center gap-2 text-xs font-mono text-foreground">
+                  <span className="w-2 h-2 rounded-full bg-foreground animate-pulse" />
                   All operational
                 </span>
               </div>

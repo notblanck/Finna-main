@@ -115,7 +115,7 @@ export function MetricsSection() {
           </div>
           <div className="flex items-center gap-4 font-mono text-sm text-muted-foreground">
             <span className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-black animate-pulse" />
               Live
             </span>
             <span className="text-foreground/30">|</span>

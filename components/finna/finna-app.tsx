@@ -13,7 +13,7 @@ import { CashflowCalendar } from "./cashflow-calendar"
 
 const fade = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -12 }, transition: { duration: .35 } }
 
-function Logo() { return <div className="flex items-center gap-2.5 font-semibold tracking-tight"><span className="flex size-8 items-center justify-center rounded-xl bg-[#d7f36a] text-[#122017]"><Sparkles className="size-4" /></span><span className="text-lg">finna</span></div> }
+function Logo() { return <div className="flex items-center gap-2.5 font-semibold tracking-tight"><span className="flex size-8 items-center justify-center rounded-xl bg-black text-white"><Sparkles className="size-4" /></span><span className="text-lg text-black">finna</span></div> }
 function Shell({ children, back = false, onBack }: { children: React.ReactNode; back?: boolean; onBack?: () => void }) {
   const handleBack = () => {
     if (onBack) {
@@ -34,30 +34,30 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f9f5] text-[#17211b]">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-6 md:px-8">
+    <div className="min-h-screen bg-white text-black">
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-6 md:px-8 border-b border-[#e5e5e5]">
         <div className="flex items-center gap-5">
           {back && (
             <button
               onClick={handleBack}
               aria-label="Go back"
-              className="rounded-full border border-[#dfe5d9] p-2 text-[#657067] hover:bg-white transition cursor-pointer"
+              className="rounded-full border border-[#e5e5e5] p-2 text-[#737373] hover:text-black hover:bg-[#f5f5f5] transition cursor-pointer"
             >
               <ArrowLeft className="size-4" />
             </button>
           )}
           <Logo />
         </div>
-        <div className="flex items-center gap-4 text-xs text-[#69756b]">
+        <div className="flex items-center gap-4 text-xs text-[#737373]">
           <button
             onClick={navigateToLogin}
-            className="flex items-center gap-1.5 rounded-full border border-[#dfe5d9] bg-white px-3.5 py-1.5 font-medium text-[#17211b] hover:bg-[#edf2e6] transition cursor-pointer"
+            className="flex items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-white px-3.5 py-1.5 font-medium text-black hover:bg-[#f5f5f5] transition cursor-pointer"
           >
-            <LogIn className="size-3.5 text-[#5e774a]" />
+            <LogIn className="size-3.5 text-black" />
             <span>Sign In</span>
           </button>
-          <div className="hidden sm:flex items-center gap-2 text-xs text-[#69756b]">
-            <LockKeyhole className="size-3.5" /> Private and secure
+          <div className="hidden sm:flex items-center gap-2 text-xs text-[#737373]">
+            <LockKeyhole className="size-3.5 text-black" /> Private and secure
           </div>
         </div>
       </header>
@@ -68,7 +68,7 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
 
 function Pill({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#edf6dc] px-3 py-1.5 text-[11px] font-medium text-[#4e683d]">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-[#f5f5f5] border border-[#e5e5e5] px-3 py-1.5 text-[11px] font-medium text-black">
       {children}
     </span>
   )
@@ -91,58 +91,58 @@ function ConsentPage() {
           <h1 className="mt-6 max-w-xl text-5xl font-medium leading-[1.03] tracking-[-.055em] md:text-7xl">
             Your financial story, <em className="font-display font-normal">made clearer.</em>
           </h1>
-          <p className="mt-6 max-w-lg text-base leading-7 text-[#657067]">
+          <p className="mt-6 max-w-lg text-base leading-7 text-[#737373]">
             FINNA uses your consented financial data to help you understand your money and make better decisions. You stay in control, always.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <button
               onClick={start}
-              className="group inline-flex items-center gap-3 rounded-full bg-[#17211b] px-5 py-3.5 text-sm font-medium text-white transition hover:bg-[#344238]"
+              className="group inline-flex items-center gap-3 rounded-full bg-black px-5 py-3.5 text-sm font-medium text-white transition hover:bg-[#262626]"
             >
               Review and give consent <ArrowRight className="size-4 transition group-hover:translate-x-1" />
             </button>
             <button
               onClick={cancelConsent}
-              className="rounded-full px-5 py-3.5 text-sm text-[#657067] hover:bg-white transition"
+              className="rounded-full border border-[#e5e5e5] px-5 py-3.5 text-sm text-[#737373] hover:text-black hover:bg-[#f5f5f5] transition"
             >
               Not now
             </button>
           </div>
         </section>
-        <section className="rounded-[2rem] border border-[#dfe5d9] bg-white p-6 shadow-[0_18px_60px_rgba(31,55,35,.07)] md:p-8">
+        <section className="rounded-[2rem] border border-[#e5e5e5] bg-white p-6 shadow-[0_18px_60px_rgba(0,0,0,.06)] md:p-8">
           <div className="flex items-start justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[.16em] text-[#869188]">Requested by</p>
-              <h2 className="mt-2 text-2xl font-medium">FINNA</h2>
-              <p className="mt-1 text-sm text-[#657067]">Financial Intelligence for New Age</p>
+              <p className="text-xs uppercase tracking-[.16em] text-[#737373]">Requested by</p>
+              <h2 className="mt-2 text-2xl font-medium text-black">FINNA</h2>
+              <p className="mt-1 text-sm text-[#737373]">Financial Intelligence for New Age</p>
             </div>
-            <div className="flex size-12 items-center justify-center rounded-2xl bg-[#f0f7dd] text-[#729052]">
+            <div className="flex size-12 items-center justify-center rounded-2xl bg-[#f5f5f5] border border-[#e5e5e5] text-black">
               <WalletCards className="size-5" />
             </div>
           </div>
-          <div className="my-7 h-px bg-[#edf0e9]" />
-          <p className="text-sm leading-6 text-[#657067]">{consent.purpose}</p>
+          <div className="my-7 h-px bg-[#e5e5e5]" />
+          <p className="text-sm leading-6 text-[#737373]">{consent.purpose}</p>
           <div className="mt-7 space-y-4">
             {consent.dataTypes.map((item) => (
-              <div key={item} className="flex items-center gap-3 text-sm">
-                <span className="flex size-6 items-center justify-center rounded-full bg-[#eaf5d3] text-[#6c9148]">
+              <div key={item} className="flex items-center gap-3 text-sm text-black">
+                <span className="flex size-6 items-center justify-center rounded-full bg-black text-white">
                   <Check className="size-3.5" />
                 </span>
                 {item}
               </div>
             ))}
           </div>
-          <div className="mt-8 flex items-center justify-between border-t border-[#edf0e9] pt-5 text-xs text-[#768178]">
+          <div className="mt-8 flex items-center justify-between border-t border-[#e5e5e5] pt-5 text-xs text-[#737373]">
             <span>Access duration</span>
-            <strong className="font-medium text-[#263329]">{consent.duration}</strong>
+            <strong className="font-medium text-black">{consent.duration}</strong>
           </div>
-          <div className="mt-3 flex items-center justify-between text-xs text-[#768178]">
+          <div className="mt-3 flex items-center justify-between text-xs text-[#737373]">
             <span>Consent ID</span>
-            <code className="text-[10px] text-[#526057]">{consent.id}</code>
+            <code className="text-[10px] text-[#525252] bg-[#f5f5f5] px-1.5 py-0.5 rounded">{consent.id}</code>
           </div>
         </section>
       </motion.div>
-      <div className="mx-auto mt-14 flex max-w-5xl items-center gap-3 text-xs text-[#8a948c]">
+      <div className="mx-auto mt-14 flex max-w-5xl items-center gap-3 text-xs text-[#737373]">
         <CircleHelp className="size-4" /> You can revoke this consent anytime from your FINNA profile.
       </div>
     </Shell>
@@ -162,45 +162,45 @@ function AuthorizePage() {
       window.dispatchEvent(new PopStateEvent("popstate"))
     }}>
       <motion.div {...fade} className="mx-auto max-w-3xl pt-10 md:pt-20">
-        <div className="mx-auto max-w-lg rounded-[2rem] border border-[#d8dfd2] bg-white p-7 shadow-[0_18px_60px_rgba(31,55,35,.08)] md:p-10">
-          <div className="flex items-center justify-between border-b border-[#edf0e9] pb-6">
+        <div className="mx-auto max-w-lg rounded-[2rem] border border-[#e5e5e5] bg-white p-7 shadow-[0_18px_60px_rgba(0,0,0,.06)] md:p-10">
+          <div className="flex items-center justify-between border-b border-[#e5e5e5] pb-6">
             <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-[#15251c] text-[#d7f36a]">
+              <div className="flex size-10 items-center justify-center rounded-xl bg-black text-white">
                 <WalletCards className="size-5" />
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-[.18em] text-[#869188]">Sandbox</p>
-                <p className="font-medium">Account Aggregator</p>
+                <p className="text-[10px] uppercase tracking-[.18em] text-[#737373]">Sandbox</p>
+                <p className="font-medium text-black">Account Aggregator</p>
               </div>
             </div>
-            <span className="rounded-full bg-[#fff4d8] px-2.5 py-1 text-[10px] text-[#94742a]">TEST MODE</span>
+            <span className="rounded-full bg-[#f5f5f5] border border-[#e5e5e5] px-2.5 py-1 text-[10px] font-semibold text-black">TEST MODE</span>
           </div>
           <div className="py-8 text-center">
-            <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-[#f0f7dd] text-[#6c9148]">
+            <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-[#f5f5f5] border border-[#e5e5e5] text-black">
               <ShieldCheck className="size-8" />
             </div>
-            <h1 className="mt-5 text-3xl font-medium tracking-[-.04em]">Link your account</h1>
-            <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[#657067]">
+            <h1 className="mt-5 text-3xl font-medium tracking-[-.04em] text-black">Link your account</h1>
+            <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[#737373]">
               FINNA is requesting temporary access to your financial information through a secure, regulated connection.
             </p>
           </div>
-          <div className="rounded-2xl bg-[#f7f9f4] p-4">
+          <div className="rounded-2xl bg-[#f5f5f5] border border-[#e5e5e5] p-4">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-[#68736b]">Data requested</span>
-              <span className="font-medium">3 categories</span>
+              <span className="text-[#737373]">Data requested</span>
+              <span className="font-medium text-black">3 categories</span>
             </div>
             <div className="mt-3 flex items-center justify-between text-sm">
-              <span className="text-[#68736b]">For</span>
-              <span className="font-medium">{consent.duration}</span>
+              <span className="text-[#737373]">For</span>
+              <span className="font-medium text-black">{consent.duration}</span>
             </div>
           </div>
           <button
             onClick={approve}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-[#17211b] py-3.5 text-sm font-medium text-white hover:bg-[#344238] transition"
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-black py-3.5 text-sm font-medium text-white hover:bg-[#262626] transition"
           >
             Approve &amp; link account <ArrowRight className="size-4" />
           </button>
-          <p className="mt-5 text-center text-[11px] leading-5 text-[#88938a]">
+          <p className="mt-5 text-center text-[11px] leading-5 text-[#737373]">
             By continuing, you agree to share this information with FINNA. Your data is encrypted end-to-end.
           </p>
         </div>
@@ -234,40 +234,40 @@ function RetrievingPage() {
         <Pill>
           <Clock3 className="size-3.5" /> Secure retrieval in progress
         </Pill>
-        <h1 className="mt-6 text-4xl font-medium tracking-[-.05em] md:text-6xl">
+        <h1 className="mt-6 text-4xl font-medium tracking-[-.05em] md:text-6xl text-black">
           Making sense of your <em className="font-display font-normal">money.</em>
         </h1>
-        <p className="mx-auto mt-5 max-w-md text-sm leading-6 text-[#657067]">
+        <p className="mx-auto mt-5 max-w-md text-sm leading-6 text-[#737373]">
           Your data is being securely retrieved and organized. This usually takes a few moments.
         </p>
         <div className="mx-auto mt-12 max-w-md text-left">
           {steps.map((item, index) => (
-            <div key={item} className="flex items-center gap-4 border-b border-[#e8ede5] py-4">
+            <div key={item} className="flex items-center gap-4 border-b border-[#e5e5e5] py-4">
               <span
                 className={`flex size-8 items-center justify-center rounded-full text-xs font-medium ${
                   index < step
-                    ? "bg-[#d7f36a] text-[#25351f]"
+                    ? "bg-black text-white"
                     : index === step
-                    ? "border border-[#aabca0] bg-white text-[#526057]"
-                    : "bg-[#edf0ea] text-[#a2aca3]"
+                    ? "border border-black bg-white text-black font-bold"
+                    : "bg-[#f5f5f5] text-[#a3a3a3]"
                 }`}
               >
                 {index < step ? <Check className="size-4" /> : index + 1}
               </span>
-              <span className={index <= step ? "text-sm text-[#263329]" : "text-sm text-[#a2aca3]"}>
+              <span className={index <= step ? "text-sm font-medium text-black" : "text-sm text-[#a3a3a3]"}>
                 {item}
               </span>
               {index === step && step < steps.length && (
                 <motion.span
                   animate={{ opacity: [0.3, 1, 0.3] }}
                   transition={{ repeat: Infinity, duration: 1.2 }}
-                  className="ml-auto size-1.5 rounded-full bg-[#8baa68]"
+                  className="ml-auto size-1.5 rounded-full bg-black"
                 />
               )}
             </div>
           ))}
         </div>
-        <p className="mt-10 text-xs text-[#8a948c]">This page is a simulated Account Aggregator connection.</p>
+        <p className="mt-10 text-xs text-[#737373]">This page is a simulated Account Aggregator connection.</p>
       </motion.div>
     </Shell>
   )
@@ -297,51 +297,51 @@ function DashboardPage() {
             <Pill>
               <ShieldCheck className="size-3.5" /> Connected securely
             </Pill>
-            <h1 className="mt-5 text-4xl font-medium tracking-[-.05em] md:text-6xl">Good morning, Arun.</h1>
-            <p className="mt-3 text-sm text-[#657067]">Here is your financial picture, in one clear view.</p>
+            <h1 className="mt-5 text-4xl font-medium tracking-[-.05em] md:text-6xl text-black">Good morning, Arun.</h1>
+            <p className="mt-3 text-sm text-[#737373]">Here is your financial picture, in one clear view.</p>
           </div>
-          <button className="flex items-center gap-2 self-start rounded-full border border-[#dfe5d9] bg-white px-4 py-2.5 text-sm text-[#526057]">
+          <button className="flex items-center gap-2 self-start rounded-full border border-[#e5e5e5] bg-white px-4 py-2.5 text-sm text-black hover:bg-[#f5f5f5] transition">
             This month <ChevronDown className="size-4" />
           </button>
         </div>
 
         <div className="mt-10 grid gap-4 md:grid-cols-3">
-          <div className="rounded-3xl bg-[#17211b] p-6 text-white md:col-span-2">
-            <p className="text-xs text-[#aeb9aa]">Total balance</p>
+          <div className="rounded-3xl bg-black p-6 text-white md:col-span-2">
+            <p className="text-xs text-[#a3a3a3]">Total balance</p>
             <p className="mt-3 text-4xl font-medium tracking-[-.04em]">{account?.balance ?? "—"}</p>
-            <p className="mt-8 text-xs text-[#aeb9aa]">
+            <p className="mt-8 text-xs text-[#a3a3a3]">
               Across 1 linked account · Updated {account?.lastSynced.toLowerCase() ?? "—"}
             </p>
           </div>
 
-          <div className="rounded-3xl border border-[#dfe5d9] bg-white p-6">
-            <p className="text-xs text-[#869188]">Financial health</p>
-            <p className="mt-3 text-4xl font-medium">Good</p>
-            <div className="mt-8 h-2 overflow-hidden rounded-full bg-[#edf0e9]">
-              <div className="h-full w-[72%] rounded-full bg-[#b9d875]" />
+          <div className="rounded-3xl border border-[#e5e5e5] bg-white p-6 shadow-sm">
+            <p className="text-xs text-[#737373]">Financial health</p>
+            <p className="mt-3 text-4xl font-medium text-black">Good</p>
+            <div className="mt-8 h-2 overflow-hidden rounded-full bg-[#e5e5e5]">
+              <div className="h-full w-[72%] rounded-full bg-black" />
             </div>
-            <p className="mt-3 text-xs text-[#657067]">72 / 100 · Building steadily</p>
+            <p className="mt-3 text-xs text-[#737373]">72 / 100 · Building steadily</p>
           </div>
         </div>
 
         <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_.8fr]">
-          <section className="rounded-3xl border border-[#dfe5d9] bg-white p-6 md:p-7">
+          <section className="rounded-3xl border border-[#e5e5e5] bg-white p-6 md:p-7 shadow-sm">
             <div className="flex items-center justify-between">
-              <h2 className="font-medium">Recent activity</h2>
-              <span className="text-xs text-[#8a948c]">{account?.bank}</span>
+              <h2 className="font-medium text-black">Recent activity</h2>
+              <span className="text-xs text-[#737373]">{account?.bank}</span>
             </div>
             <div className="mt-4">
               {transactions.map((transaction) => (
-                <div key={transaction.id} className="flex items-center justify-between border-t border-[#edf0e9] py-4">
+                <div key={transaction.id} className="flex items-center justify-between border-t border-[#e5e5e5] py-4">
                   <div>
-                    <p className="text-sm font-medium">{transaction.merchant}</p>
-                    <p className="mt-1 text-xs text-[#8a948c]">
+                    <p className="text-sm font-medium text-black">{transaction.merchant}</p>
+                    <p className="mt-1 text-xs text-[#737373]">
                       {transaction.category} · {transaction.date}
                     </p>
                   </div>
                   <span
-                    className={`text-sm font-medium ${
-                      transaction.type === "credit" ? "text-[#678844]" : "text-[#263329]"
+                    className={`text-sm font-semibold ${
+                      transaction.type === "credit" ? "text-black" : "text-[#525252]"
                     }`}
                   >
                     {formatSignedCurrency(transaction.amount, transaction.type)}
@@ -351,17 +351,17 @@ function DashboardPage() {
             </div>
           </section>
 
-          <section className="rounded-3xl bg-[#17211b] p-7 text-white border border-[#233128] shadow-[0_18px_60px_rgba(23,33,27,.08)] flex flex-col justify-between">
+          <section className="rounded-3xl bg-black p-7 text-white border border-[#262626] shadow-[0_18px_60px_rgba(0,0,0,.08)] flex flex-col justify-between">
             <div>
-              <Sparkles className="size-5 text-[#d7f36a]" />
+              <Sparkles className="size-5 text-white" />
               <h2 className="mt-5 text-2xl font-medium tracking-[-.03em] text-white">A clearer next step.</h2>
-              <p className="mt-3 text-sm leading-6 text-[#aeb9aa]">
+              <p className="mt-3 text-sm leading-6 text-[#a3a3a3]">
                 Your income is consistent, and your spending is stable. You could comfortably set aside ₹3,200 this month.
               </p>
             </div>
             <button
               onClick={goToInsights}
-              className="mt-7 inline-flex items-center gap-2 text-sm font-medium text-[#d7f36a] hover:text-[#eaf98d] transition group cursor-pointer self-start"
+              className="mt-7 inline-flex items-center gap-2 text-sm font-medium text-white hover:text-[#e5e5e5] transition group cursor-pointer self-start underline underline-offset-4"
             >
               Explore insights <ArrowRight className="size-4 transition group-hover:translate-x-1" />
             </button>

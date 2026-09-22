@@ -186,7 +186,7 @@ export function HowItWorksSection() {
 
               {/* Status */}
               <div className="px-6 py-4 border-t border-background/10 flex items-center gap-3">
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                 <span className="text-xs font-mono text-background/40">Ready</span>
               </div>
             </div>
