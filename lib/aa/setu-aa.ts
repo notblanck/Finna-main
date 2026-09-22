@@ -65,10 +65,20 @@ export class SetuAAProvider implements AAProvider {
     return data.access_token
   }
 
+  private async safeParse(res: Response): Promise<{ ok: boolean; status: number; data: any }> {
+    const text = await res.text()
+    try {
+      return { ok: res.ok, status: res.status, data: JSON.parse(text) }
+    } catch {
+      return { ok: res.ok, status: res.status, data: { message: text } }
+    }
+  }
+
   private async getHeaders(): Promise<Record<string, string>> {
     this.validateConfiguration()
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
+      "User-Agent": "FINNA-App/1.0",
       "x-client-id": this.clientId,
       "x-client-secret": this.clientSecret,
       "x-product-instance-id": this.productInstanceId,
@@ -107,20 +117,21 @@ export class SetuAAProvider implements AAProvider {
       body: JSON.stringify({ ...payload, fiTypes: requestedFiTypes }),
     })
 
-    let data = await res.json()
-    if (!res.ok && (data.errorMsg?.includes("Invalid FIType") || data.message?.includes("Invalid FIType"))) {
+    let parsed = await this.safeParse(res)
+    if (!parsed.ok && (parsed.data.errorMsg?.includes("Invalid FIType") || parsed.data.message?.includes("Invalid FIType"))) {
       // Automatic fallback if deposit FI type is not enabled on this product instance
       res = await fetch(`${this.baseUrl}/v2/consents`, {
         method: "POST",
         headers,
         body: JSON.stringify({ ...payload, fiTypes: ["INSURANCE_POLICIES"] }),
       })
-      data = await res.json()
+      parsed = await this.safeParse(res)
     }
 
-    if (!res.ok) {
+    const data = parsed.data
+    if (!parsed.ok) {
       const msg = data.errorMsg || data.message || JSON.stringify(data)
-      throw new Error(`Setu Create Consent API Error (${res.status}): ${msg}`)
+      throw new Error(`Setu Create Consent API Error (${parsed.status}): ${msg}`)
     }
 
     const consentId = data.id || data.consentId || data.consentCollectionId
@@ -145,9 +156,10 @@ export class SetuAAProvider implements AAProvider {
       headers,
     })
 
-    const data = await res.json()
-    if (!res.ok) {
-      throw new Error(`Setu Get Consent Status Error (${res.status}): ${data.message || data.errorMsg || res.statusText}`)
+    const parsed = await this.safeParse(res)
+    const data = parsed.data
+    if (!parsed.ok) {
+      throw new Error(`Setu Get Consent Status Error (${parsed.status}): ${data.message || data.errorMsg || JSON.stringify(data)}`)
     }
 
     return {
@@ -191,9 +203,10 @@ export class SetuAAProvider implements AAProvider {
       }),
     })
 
-    const data = await res.json()
-    if (!res.ok) {
-      throw new Error(`Setu Create Session Error (${res.status}): ${data.message || data.errorMsg || res.statusText}`)
+    const parsed = await this.safeParse(res)
+    const data = parsed.data
+    if (!parsed.ok) {
+      throw new Error(`Setu Create Session Error (${parsed.status}): ${data.message || data.errorMsg || JSON.stringify(data)}`)
     }
 
     return {
@@ -212,9 +225,10 @@ export class SetuAAProvider implements AAProvider {
       headers,
     })
 
-    const payload = await res.json()
-    if (!res.ok) {
-      throw new Error(`Setu Fetch Session Data Error (${res.status}): ${payload.message || payload.errorMsg || res.statusText}`)
+    const parsed = await this.safeParse(res)
+    const payload = parsed.data
+    if (!parsed.ok) {
+      throw new Error(`Setu Fetch Session Data Error (${parsed.status}): ${payload.message || payload.errorMsg || JSON.stringify(payload)}`)
     }
 
     const accounts: any[] = []
