@@ -312,13 +312,13 @@ export default function AccountAggregatorPage() {
               >
                 Open Setu Bridge <ExternalLink className="size-3.5" />
               </a>
-              <Button
-                variant="outline"
+              <button
+                type="button"
                 onClick={handleSimulateApproval}
-                className="border-white/40 text-white hover:bg-white/10 text-xs rounded-xl h-9"
+                className="inline-flex items-center justify-center border border-white text-white bg-transparent hover:bg-white hover:text-black transition-colors font-medium text-xs rounded-xl h-9 px-3.5 cursor-pointer"
               >
                 Quick Demo (Simulate Approval)
-              </Button>
+              </button>
               <Button
                 variant="ghost"
                 onClick={() => setConfigError(null)}
