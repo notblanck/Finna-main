@@ -156,14 +156,29 @@ export class SetuAAService implements AccountAggregatorService {
       dataRange: {
         from: params.dateRangeFrom || ninetyDaysAgo.toISOString(),
         to: params.dateRangeTo || now.toISOString()
-      },
-      fiTypes: ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"]
+      }
     }
 
+    const requestedFiTypes = ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"]
+
     try {
-      const response = await this.executeWithRetry(() =>
-        axios.post(`${this.baseUrl}/v2/consents`, payload, { headers, timeout: 15000 })
-      )
+      let response: any
+      try {
+        response = await this.executeWithRetry(() =>
+          axios.post(`${this.baseUrl}/v2/consents`, { ...payload, fiTypes: requestedFiTypes }, { headers, timeout: 15000 })
+        )
+      } catch (firstErr: any) {
+        const errDetail = firstErr.response?.data?.errorMsg || firstErr.response?.data?.message || ""
+        if (errDetail.includes("Invalid FIType")) {
+          // Fallback to INSURANCE_POLICIES if bank deposit is not enabled on this product instance
+          response = await this.executeWithRetry(() =>
+            axios.post(`${this.baseUrl}/v2/consents`, { ...payload, fiTypes: ["INSURANCE_POLICIES"] }, { headers, timeout: 15000 })
+          )
+        } else {
+          throw firstErr
+        }
+      }
+
       const data = response.data
 
       const consentId = data.id || data.consentId || data.consentCollectionId || data.consent_id

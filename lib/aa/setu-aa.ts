@@ -97,16 +97,27 @@ export class SetuAAProvider implements AAProvider {
         from: params.dateRangeFrom || ninetyDaysAgo.toISOString(),
         to: params.dateRangeTo || now.toISOString(),
       },
-      fiTypes: params.fiTypes?.length ? params.fiTypes : ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"],
     }
 
-    const res = await fetch(`${this.baseUrl}/v2/consents`, {
+    const requestedFiTypes = params.fiTypes?.length ? params.fiTypes : ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"]
+
+    let res = await fetch(`${this.baseUrl}/v2/consents`, {
       method: "POST",
       headers,
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ ...payload, fiTypes: requestedFiTypes }),
     })
 
-    const data = await res.json()
+    let data = await res.json()
+    if (!res.ok && (data.errorMsg?.includes("Invalid FIType") || data.message?.includes("Invalid FIType"))) {
+      // Automatic fallback if deposit FI type is not enabled on this product instance
+      res = await fetch(`${this.baseUrl}/v2/consents`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ ...payload, fiTypes: ["INSURANCE_POLICIES"] }),
+      })
+      data = await res.json()
+    }
+
     if (!res.ok) {
       const msg = data.errorMsg || data.message || JSON.stringify(data)
       throw new Error(`Setu Create Consent API Error (${res.status}): ${msg}`)
