@@ -91,7 +91,7 @@ export class SetuAAProvider implements AAProvider {
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
     const payload = {
-      vua,
+      vua: vpa,
       consentDuration: { unit: "MONTH", value: "12" },
       dataRange: {
         from: params.dateRangeFrom || ninetyDaysAgo.toISOString(),
