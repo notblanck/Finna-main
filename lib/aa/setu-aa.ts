@@ -66,11 +66,11 @@ export class SetuAAProvider implements AAProvider {
   }
 
   private async getHeaders(): Promise<Record<string, string>> {
-    const token = await this.getAccessToken()
+    this.validateConfiguration()
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
       "x-client-id": this.clientId,
+      "x-client-secret": this.clientSecret,
       "x-product-instance-id": this.productInstanceId,
     }
 

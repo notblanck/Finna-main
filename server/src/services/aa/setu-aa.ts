@@ -123,12 +123,12 @@ export class SetuAAService implements AccountAggregatorService {
    * Generates standard Setu AA API request headers
    */
   private async getHeaders(): Promise<Record<string, string>> {
-    const token = await this.getAccessToken()
+    this.validateConfiguration()
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
       "x-client-id": this.clientId,
-      "x-product-instance-id": this.productInstanceId
+      "x-client-secret": this.clientSecret,
+      "x-product-instance-id": this.productInstanceId,
     }
 
     if (this.fiuId) {
