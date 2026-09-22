@@ -301,6 +301,32 @@ class FinnaApiClient {
       body: JSON.stringify({ language })
     })
   }
+
+  async getIncomeEntries() {
+    return this.request<{ total_income_this_month: number; entries: any[] }>("/income")
+  }
+
+  async addIncomeEntry(entry: any) {
+    return this.request("/income", {
+      method: "POST",
+      body: JSON.stringify(entry)
+    })
+  }
+
+  async getExpenses() {
+    return this.request<{ total_expenses_this_month: number; expenses: any[] }>("/expenses")
+  }
+
+  async addExpense(expense: any) {
+    return this.request("/expenses", {
+      method: "POST",
+      body: JSON.stringify(expense)
+    })
+  }
+
+  async getBudgets() {
+    return this.request<{ budgets: any[] }>("/budgets")
+  }
 }
 
 export const finnaApi = new FinnaApiClient()
