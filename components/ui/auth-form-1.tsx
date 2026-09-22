@@ -300,6 +300,13 @@ function AuthSignIn({ onForgotPassword, onSignUp, onSuccess }: AuthSignInProps) 
     }
   };
 
+  const handleGoogleSignIn = () => {
+    if (typeof window !== "undefined") {
+      const redirectUrl = `${window.location.origin}/auth/callback`;
+      window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
+    }
+  };
+
   const handleDemoSignIn = () => {
     const demoUser = {
       id: "demo-rider-001",
@@ -393,7 +400,19 @@ function AuthSignIn({ onForgotPassword, onSignUp, onSuccess }: AuthSignInProps) 
       </AuthForm>
 
       <AuthSeparator />
-      <AuthSocialButtons isLoading={formState.isLoading} onGoogleClick={handleDemoSignIn} />
+      <AuthSocialButtons isLoading={formState.isLoading} onGoogleClick={handleGoogleSignIn} />
+
+      <div className="mt-3">
+        <Button
+          type="button"
+          variant="secondary"
+          className="w-full h-10 text-xs font-mono bg-[#f5f5f5] text-black border border-[#e5e5e5] hover:bg-[#e5e5e5] cursor-pointer"
+          onClick={handleDemoSignIn}
+          disabled={formState.isLoading}
+        >
+          ⚡ Fast Demo Sign-in (Aakash Verma)
+        </Button>
+      </div>
 
       <p className="mt-8 text-center text-sm text-muted-foreground">
         No account?{" "}
