@@ -95,6 +95,32 @@ export default function AccountAggregatorPage() {
     }
   }, [])
 
+  // Handle redirect callback from Setu (when returning from Setu consent portal)
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const urlParams = new URLSearchParams(window.location.search)
+      const callbackConsentId = urlParams.get("id") || urlParams.get("consentId") || urlParams.get("consent_id")
+      const isSuccess = urlParams.get("success")
+
+      if (callbackConsentId) {
+        // Clear params from address bar
+        window.history.replaceState({}, document.title, window.location.pathname)
+
+        if (isSuccess === "false") {
+          setConfigError("Consent request was rejected or cancelled on the Setu portal. You can retry anytime.")
+          setStep("init")
+        } else {
+          setConsentId(callbackConsentId)
+          setConsentStatus("APPROVED")
+          handleConsentApproved(callbackConsentId)
+        }
+      }
+    } catch {
+      // Ignored
+    }
+  }, [])
+
   // Poll Setu Consent Status every 3s when in webview step
   React.useEffect(() => {
     if (step !== "webview" || !consentId) return
@@ -131,10 +157,12 @@ export default function AccountAggregatorPage() {
     setConfigError(null)
 
     try {
+      const redirectUrl = typeof window !== "undefined" ? `${window.location.origin}/aa` : "https://finnastudio.me/aa"
       const res = await finnaApi.createAAConsent({
         phone: mobileNumber,
         vpa: vpaHandle,
-        purpose: "Personal Finance Management"
+        purpose: "Personal Finance Management",
+        redirectUrl
       })
 
       setConsentId(res.consentId)

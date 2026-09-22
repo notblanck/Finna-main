@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { setuAA, SetuConfigurationError } from "@/lib/aa/setu-aa"
 import { createClient } from "@/lib/supabase/server"
 import { proxyToBackend, isCloudflareBlock } from "@/lib/aa/proxy"
+export const preferredRegion = "bom1"
+export const runtime = "nodejs"
 
 export async function POST(request: Request) {
   try {

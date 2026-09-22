@@ -3,6 +3,9 @@ import { setuAA, SetuConfigurationError } from "@/lib/aa/setu-aa"
 import { createClient } from "@/lib/supabase/server"
 import { proxyToBackend, isCloudflareBlock } from "@/lib/aa/proxy"
 
+export const preferredRegion = "bom1"
+export const runtime = "nodejs"
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}))
@@ -12,6 +15,7 @@ export async function POST(request: Request) {
     const phone = body.phone || body.phoneNumber || user?.phone || "+919876543210"
     const vpa = body.vpa || (phone ? `${phone.replace(/^\+91/, "")}@setu` : "9876543210@setu")
     const purpose = body.purpose || "Personal Finance Management"
+    const redirectUrl = body.redirectUrl || (process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/aa` : undefined)
 
     let consentRes: any
     try {
@@ -20,7 +24,8 @@ export async function POST(request: Request) {
         vpa,
         fiTypes: body.fiTypes || ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"],
         dateRangeFrom: body.dateRangeFrom,
-        dateRangeTo: body.dateRangeTo
+        dateRangeTo: body.dateRangeTo,
+        redirectUrl
       })
     } catch (apiErr: any) {
       if (apiErr instanceof SetuConfigurationError || apiErr.name === "SetuConfigurationError") {

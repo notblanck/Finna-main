@@ -100,13 +100,14 @@ export class SetuAAProvider implements AAProvider {
     const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
-    const payload = {
+    const payload: any = {
       vua: vpa,
       consentDuration: { unit: "MONTH", value: "12" },
       dataRange: {
         from: params.dateRangeFrom || ninetyDaysAgo.toISOString(),
         to: params.dateRangeTo || now.toISOString(),
       },
+      ...(params.redirectUrl ? { redirectUrl: params.redirectUrl } : {})
     }
 
     const requestedFiTypes = params.fiTypes?.length ? params.fiTypes : ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"]
@@ -118,8 +119,9 @@ export class SetuAAProvider implements AAProvider {
     })
 
     let parsed = await this.safeParse(res)
-    if (!parsed.ok && (parsed.data.errorMsg?.includes("Invalid FIType") || parsed.data.message?.includes("Invalid FIType"))) {
-      // Automatic fallback if deposit FI type is not enabled on this product instance
+    const errText = JSON.stringify(parsed.data || {})
+    if (!parsed.ok && (errText.includes("Invalid FIType") || errText.includes("FIType"))) {
+      // Automatic fallback to INSURANCE_POLICIES configured on this sandbox product instance
       res = await fetch(`${this.baseUrl}/v2/consents`, {
         method: "POST",
         headers,

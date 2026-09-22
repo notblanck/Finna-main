@@ -4,12 +4,13 @@
 // ==============================================================================
 
 export interface CreateConsentParams {
-  userId: string
+  userId?: string
   phone?: string
   vpa?: string
-  fiTypes: string[]
-  dateRangeFrom: string
-  dateRangeTo: string
+  fiTypes?: string[]
+  dateRangeFrom?: string
+  dateRangeTo?: string
+  redirectUrl?: string
 }
 
 export interface ConsentResponse {
