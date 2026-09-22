@@ -50,7 +50,7 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
           <Link href="/dashboard" className="cursor-pointer">
             <Logo />
           </Link>
-          <nav className="hidden md:flex items-center gap-4 text-xs font-medium text-[#737373]">
+          <nav className="hidden md:flex items-center gap-5 text-xs font-medium text-[#737373]">
             <Link href="/dashboard" className="hover:text-black transition">Dashboard</Link>
             <Link href="/insights" className="hover:text-black transition">Cashflow Calendar</Link>
             <Link href="/schemes" className="hover:text-black transition flex items-center gap-1.5">
@@ -64,21 +64,7 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
             <Link href="/aa" className="hover:text-black transition">Bank Sync (AA)</Link>
           </nav>
         </div>
-        <div className="flex items-center gap-3 text-xs text-[#737373]">
-          <Link
-            href="/schemes"
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-white px-3.5 py-1.5 font-medium text-black hover:bg-[#f5f5f5] transition cursor-pointer"
-          >
-            <Award className="size-3.5 text-black" />
-            <span>Schemes</span>
-          </Link>
-          <Link
-            href="/health-score"
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-white px-3.5 py-1.5 font-medium text-black hover:bg-[#f5f5f5] transition cursor-pointer"
-          >
-            <Activity className="size-3.5 text-black" />
-            <span>Health Score</span>
-          </Link>
+        <div className="flex items-center gap-4 text-xs text-[#737373]">
           <button
             onClick={navigateToLogin}
             className="flex items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-white px-3.5 py-1.5 font-medium text-black hover:bg-[#f5f5f5] transition cursor-pointer"
@@ -86,7 +72,7 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
             <LogIn className="size-3.5 text-black" />
             <span>Sign In</span>
           </button>
-          <div className="hidden lg:flex items-center gap-2 text-xs text-[#737373]">
+          <div className="hidden sm:flex items-center gap-2 text-xs text-[#737373]">
             <LockKeyhole className="size-3.5 text-black" /> Private and secure
           </div>
         </div>
@@ -347,59 +333,79 @@ function DashboardPage() {
             <h1 className="mt-5 text-4xl font-medium tracking-[-.05em] md:text-6xl text-black">Good morning, Arun.</h1>
             <p className="mt-3 text-sm text-[#737373]">Here is your financial picture, in one clear view.</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2.5 self-start md:self-end">
-            <Link
-              href="/schemes"
-              className="inline-flex items-center gap-2 rounded-full border border-[#e5e5e5] bg-white px-4 py-2.5 text-sm font-medium text-black hover:bg-[#f5f5f5] hover:border-black transition cursor-pointer shadow-sm"
-            >
-              <Award className="size-4 text-black" />
-              <span>Welfare Schemes</span>
-              <span className="flex size-5 items-center justify-center rounded-full bg-black text-[10px] font-bold text-white">3</span>
-            </Link>
-            <Link
-              href="/health-score"
-              className="inline-flex items-center gap-2 rounded-full border border-[#e5e5e5] bg-white px-4 py-2.5 text-sm font-medium text-black hover:bg-[#f5f5f5] hover:border-black transition cursor-pointer shadow-sm"
-            >
-              <Activity className="size-4 text-black" />
-              <span>Health Score: 72</span>
-            </Link>
-            <button className="flex items-center gap-2 rounded-full border border-[#e5e5e5] bg-white px-4 py-2.5 text-sm text-black hover:bg-[#f5f5f5] transition">
-              This month <ChevronDown className="size-4" />
-            </button>
-          </div>
+          <button className="flex items-center gap-2 self-start rounded-full border border-[#e5e5e5] bg-white px-4 py-2.5 text-sm text-black hover:bg-[#f5f5f5] transition cursor-pointer">
+            This month <ChevronDown className="size-4" />
+          </button>
         </div>
 
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
-          <div className="rounded-3xl bg-black p-6 text-white md:col-span-2">
-            <p className="text-xs text-[#a3a3a3]">Total balance</p>
-            <p className="mt-3 text-4xl font-medium tracking-[-.04em]">{account?.balance ?? "—"}</p>
-            <p className="mt-8 text-xs text-[#a3a3a3]">
-              Across 1 linked account · Updated {account?.lastSynced.toLowerCase() ?? "—"}
-            </p>
+        {/* 3 Core Pillars: Bank Data, Financial Health, Welfare Schemes */}
+        <div className="mt-10 grid gap-5 md:grid-cols-3">
+          {/* Pillar 1: Total Balance & Bank Feed */}
+          <div className="rounded-3xl bg-black p-6 text-white flex flex-col justify-between shadow-sm">
+            <div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-[#a3a3a3]">Total balance</p>
+                <span className="flex items-center gap-1 text-[11px] font-mono text-[#a3a3a3] bg-[#262626] px-2 py-0.5 rounded">
+                  <Landmark className="size-3" /> AA Synced
+                </span>
+              </div>
+              <p className="mt-3 text-4xl font-medium tracking-[-.04em]">{account?.balance ?? "₹42,681"}</p>
+              <p className="mt-3 text-xs text-[#a3a3a3]">
+                {account?.bank ?? "State Bank of India"} · Updated just now
+              </p>
+            </div>
+            <Link
+              href="/aa"
+              className="mt-6 inline-flex items-center gap-1.5 text-xs text-[#a3a3a3] hover:text-white transition group"
+            >
+              <span>Manage Bank Sync (AA)</span>
+              <ArrowRight className="size-3 transition group-hover:translate-x-1" />
+            </Link>
           </div>
 
+          {/* Pillar 2: Financial Health Score */}
           <div className="rounded-3xl border border-[#e5e5e5] bg-white p-6 shadow-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[#737373]">Financial health</p>
-                <Link
-                  href="/health-score"
-                  className="text-xs font-semibold text-black hover:underline inline-flex items-center gap-1"
-                >
-                  <span>Audit</span> <ArrowRight className="size-3" />
-                </Link>
+                <span className="rounded-full bg-[#f5f5f5] border border-[#e5e5e5] px-2 py-0.5 text-[10px] font-semibold text-black">
+                  72 / 100
+                </span>
               </div>
               <p className="mt-3 text-4xl font-medium text-black">Good</p>
-              <div className="mt-8 h-2 overflow-hidden rounded-full bg-[#e5e5e5]">
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#e5e5e5]">
                 <div className="h-full w-[72%] rounded-full bg-black" />
               </div>
-              <p className="mt-3 text-xs text-[#737373]">72 / 100 · Building steadily</p>
+              <p className="mt-3 text-xs text-[#737373]">Building steadily · 6-factor audit</p>
             </div>
             <Link
               href="/health-score"
-              className="mt-6 inline-flex items-center justify-between w-full rounded-full border border-[#e5e5e5] bg-[#f5f5f5] px-4 py-2.5 text-xs font-medium text-black hover:bg-black hover:text-white transition group cursor-pointer"
+              className="mt-6 inline-flex items-center justify-between rounded-full border border-[#e5e5e5] bg-[#f5f5f5] px-4 py-2.5 text-xs font-medium text-black hover:bg-black hover:text-white transition group cursor-pointer"
             >
-              <span>Explore 6-Factor Health Audit</span>
+              <span>Health Score Audit</span>
+              <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" />
+            </Link>
+          </div>
+
+          {/* Pillar 3: Welfare Schemes */}
+          <div className="rounded-3xl border border-[#e5e5e5] bg-white p-6 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-[#737373]">Welfare & Schemes</p>
+                <span className="rounded-full bg-black text-white px-2 py-0.5 text-[10px] font-semibold">
+                  3 Matched
+                </span>
+              </div>
+              <p className="mt-3 text-4xl font-medium text-black">Eligible</p>
+              <p className="mt-4 text-xs text-[#737373] line-clamp-2">
+                e-Shram, PM-SYM Pension (₹3k/mo) & TN Gig Board benefits.
+              </p>
+            </div>
+            <Link
+              href="/schemes"
+              className="mt-6 inline-flex items-center justify-between rounded-full border border-[#e5e5e5] bg-[#f5f5f5] px-4 py-2.5 text-xs font-medium text-black hover:bg-black hover:text-white transition group cursor-pointer"
+            >
+              <span>Explore Schemes</span>
               <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" />
             </Link>
           </div>
@@ -432,49 +438,21 @@ function DashboardPage() {
             </div>
           </section>
 
-          <div className="space-y-6">
-            <section className="rounded-3xl bg-black p-7 text-white border border-[#262626] shadow-[0_18px_60px_rgba(0,0,0,.08)] flex flex-col justify-between">
-              <div>
-                <Sparkles className="size-5 text-white" />
-                <h2 className="mt-5 text-2xl font-medium tracking-[-.03em] text-white">A clearer next step.</h2>
-                <p className="mt-3 text-sm leading-6 text-[#a3a3a3]">
-                  Your income is consistent, and your spending is stable. You could comfortably set aside ₹3,200 this month.
-                </p>
-              </div>
-              <button
-                onClick={goToInsights}
-                className="mt-7 inline-flex items-center gap-2 text-sm font-medium text-white hover:text-[#e5e5e5] transition group cursor-pointer self-start underline underline-offset-4"
-              >
-                Explore insights <ArrowRight className="size-4 transition group-hover:translate-x-1" />
-              </button>
-            </section>
-
-            <section className="rounded-3xl border border-[#e5e5e5] bg-white p-7 shadow-sm flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between">
-                  <span className="flex size-9 items-center justify-center rounded-xl bg-[#f5f5f5] border border-[#e5e5e5] text-black">
-                    <Award className="size-4.5" />
-                  </span>
-                  <span className="rounded-full bg-black text-white px-2.5 py-0.5 text-[11px] font-semibold">
-                    3 Eligible
-                  </span>
-                </div>
-                <h2 className="mt-4 text-xl font-medium tracking-[-.03em] text-black">
-                  Schemes & Welfare Benefits
-                </h2>
-                <p className="mt-2 text-sm leading-6 text-[#737373]">
-                  Matched with e-Shram accident cover (₹2 Lakh), PM-SYM pension (₹3,000/mo), and TN Gig Welfare Board.
-                </p>
-              </div>
-              <Link
-                href="/schemes"
-                className="mt-6 inline-flex items-center justify-between w-full rounded-full border border-[#e5e5e5] bg-[#f5f5f5] px-4 py-2.5 text-xs font-medium text-black hover:bg-black hover:text-white transition group cursor-pointer"
-              >
-                <span>Browse Eligible Schemes</span>
-                <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" />
-              </Link>
-            </section>
-          </div>
+          <section className="rounded-3xl bg-black p-7 text-white border border-[#262626] shadow-[0_18px_60px_rgba(0,0,0,.08)] flex flex-col justify-between">
+            <div>
+              <Sparkles className="size-5 text-white" />
+              <h2 className="mt-5 text-2xl font-medium tracking-[-.03em] text-white">A clearer next step.</h2>
+              <p className="mt-3 text-sm leading-6 text-[#a3a3a3]">
+                Your income is consistent, and your spending is stable. You could comfortably set aside ₹3,200 this month.
+              </p>
+            </div>
+            <button
+              onClick={goToInsights}
+              className="mt-7 inline-flex items-center gap-2 text-sm font-medium text-white hover:text-[#e5e5e5] transition group cursor-pointer self-start underline underline-offset-4"
+            >
+              Explore cashflow calendar <ArrowRight className="size-4 transition group-hover:translate-x-1" />
+            </button>
+          </section>
         </div>
       </motion.div>
     </Shell>

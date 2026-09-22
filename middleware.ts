@@ -34,7 +34,6 @@ export async function middleware(request: NextRequest) {
   // Protected paths
   const isProtectedPath = [
     "/onboarding",
-    "/aa",
   ].some((path) => pathname === path || pathname.startsWith(`${path}/`))
 
   if (isProtectedPath && !user) {
