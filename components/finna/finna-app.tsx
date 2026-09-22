@@ -1,8 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
-import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleHelp, Clock3, LockKeyhole, LogIn, ShieldCheck, Sparkles, WalletCards } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleHelp, Clock3, LockKeyhole, LogIn, ShieldCheck, Sparkles, WalletCards, Award, Activity, Landmark } from "lucide-react"
 import { useConsent } from "./consent-provider"
 import { PredictiveInsights } from "./predictive-insights"
 import { formatSignedCurrency, getAccount, getTransactions, type Account, type Transaction } from "@/lib/mock-aa-data"
@@ -36,7 +37,7 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
   return (
     <div className="min-h-screen bg-white text-black">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-6 md:px-8 border-b border-[#e5e5e5]">
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-6">
           {back && (
             <button
               onClick={handleBack}
@@ -46,9 +47,38 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
               <ArrowLeft className="size-4" />
             </button>
           )}
-          <Logo />
+          <Link href="/dashboard" className="cursor-pointer">
+            <Logo />
+          </Link>
+          <nav className="hidden md:flex items-center gap-4 text-xs font-medium text-[#737373]">
+            <Link href="/dashboard" className="hover:text-black transition">Dashboard</Link>
+            <Link href="/insights" className="hover:text-black transition">Cashflow Calendar</Link>
+            <Link href="/schemes" className="hover:text-black transition flex items-center gap-1.5">
+              <span>Schemes & Welfare</span>
+              <span className="rounded-full bg-black px-1.5 py-0.5 text-[10px] text-white font-bold">3</span>
+            </Link>
+            <Link href="/health-score" className="hover:text-black transition flex items-center gap-1.5">
+              <span>Health Score</span>
+              <span className="rounded-full bg-[#f5f5f5] border border-[#e5e5e5] px-1.5 py-0.5 text-[10px] text-black font-semibold">72</span>
+            </Link>
+            <Link href="/aa" className="hover:text-black transition">Bank Sync (AA)</Link>
+          </nav>
         </div>
-        <div className="flex items-center gap-4 text-xs text-[#737373]">
+        <div className="flex items-center gap-3 text-xs text-[#737373]">
+          <Link
+            href="/schemes"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-white px-3.5 py-1.5 font-medium text-black hover:bg-[#f5f5f5] transition cursor-pointer"
+          >
+            <Award className="size-3.5 text-black" />
+            <span>Schemes</span>
+          </Link>
+          <Link
+            href="/health-score"
+            className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-white px-3.5 py-1.5 font-medium text-black hover:bg-[#f5f5f5] transition cursor-pointer"
+          >
+            <Activity className="size-3.5 text-black" />
+            <span>Health Score</span>
+          </Link>
           <button
             onClick={navigateToLogin}
             className="flex items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-white px-3.5 py-1.5 font-medium text-black hover:bg-[#f5f5f5] transition cursor-pointer"
@@ -56,7 +86,7 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
             <LogIn className="size-3.5 text-black" />
             <span>Sign In</span>
           </button>
-          <div className="hidden sm:flex items-center gap-2 text-xs text-[#737373]">
+          <div className="hidden lg:flex items-center gap-2 text-xs text-[#737373]">
             <LockKeyhole className="size-3.5 text-black" /> Private and secure
           </div>
         </div>
@@ -107,6 +137,23 @@ function ConsentPage() {
             >
               Not now
             </button>
+          </div>
+          <div className="mt-6 flex flex-wrap items-center gap-2.5 pt-4 border-t border-[#e5e5e5]">
+            <span className="text-xs text-[#737373]">Direct Explore:</span>
+            <Link
+              href="/schemes"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#f5f5f5] hover:border-black transition"
+            >
+              <Award className="size-3.5 text-black" />
+              <span>Government Schemes</span>
+            </Link>
+            <Link
+              href="/health-score"
+              className="inline-flex items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#f5f5f5] hover:border-black transition"
+            >
+              <Activity className="size-3.5 text-black" />
+              <span>Financial Health Score</span>
+            </Link>
           </div>
         </section>
         <section className="rounded-[2rem] border border-[#e5e5e5] bg-white p-6 shadow-[0_18px_60px_rgba(0,0,0,.06)] md:p-8">
@@ -300,9 +347,26 @@ function DashboardPage() {
             <h1 className="mt-5 text-4xl font-medium tracking-[-.05em] md:text-6xl text-black">Good morning, Arun.</h1>
             <p className="mt-3 text-sm text-[#737373]">Here is your financial picture, in one clear view.</p>
           </div>
-          <button className="flex items-center gap-2 self-start rounded-full border border-[#e5e5e5] bg-white px-4 py-2.5 text-sm text-black hover:bg-[#f5f5f5] transition">
-            This month <ChevronDown className="size-4" />
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5 self-start md:self-end">
+            <Link
+              href="/schemes"
+              className="inline-flex items-center gap-2 rounded-full border border-[#e5e5e5] bg-white px-4 py-2.5 text-sm font-medium text-black hover:bg-[#f5f5f5] hover:border-black transition cursor-pointer shadow-sm"
+            >
+              <Award className="size-4 text-black" />
+              <span>Welfare Schemes</span>
+              <span className="flex size-5 items-center justify-center rounded-full bg-black text-[10px] font-bold text-white">3</span>
+            </Link>
+            <Link
+              href="/health-score"
+              className="inline-flex items-center gap-2 rounded-full border border-[#e5e5e5] bg-white px-4 py-2.5 text-sm font-medium text-black hover:bg-[#f5f5f5] hover:border-black transition cursor-pointer shadow-sm"
+            >
+              <Activity className="size-4 text-black" />
+              <span>Health Score: 72</span>
+            </Link>
+            <button className="flex items-center gap-2 rounded-full border border-[#e5e5e5] bg-white px-4 py-2.5 text-sm text-black hover:bg-[#f5f5f5] transition">
+              This month <ChevronDown className="size-4" />
+            </button>
+          </div>
         </div>
 
         <div className="mt-10 grid gap-4 md:grid-cols-3">
@@ -314,13 +378,30 @@ function DashboardPage() {
             </p>
           </div>
 
-          <div className="rounded-3xl border border-[#e5e5e5] bg-white p-6 shadow-sm">
-            <p className="text-xs text-[#737373]">Financial health</p>
-            <p className="mt-3 text-4xl font-medium text-black">Good</p>
-            <div className="mt-8 h-2 overflow-hidden rounded-full bg-[#e5e5e5]">
-              <div className="h-full w-[72%] rounded-full bg-black" />
+          <div className="rounded-3xl border border-[#e5e5e5] bg-white p-6 shadow-sm flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-[#737373]">Financial health</p>
+                <Link
+                  href="/health-score"
+                  className="text-xs font-semibold text-black hover:underline inline-flex items-center gap-1"
+                >
+                  <span>Audit</span> <ArrowRight className="size-3" />
+                </Link>
+              </div>
+              <p className="mt-3 text-4xl font-medium text-black">Good</p>
+              <div className="mt-8 h-2 overflow-hidden rounded-full bg-[#e5e5e5]">
+                <div className="h-full w-[72%] rounded-full bg-black" />
+              </div>
+              <p className="mt-3 text-xs text-[#737373]">72 / 100 · Building steadily</p>
             </div>
-            <p className="mt-3 text-xs text-[#737373]">72 / 100 · Building steadily</p>
+            <Link
+              href="/health-score"
+              className="mt-6 inline-flex items-center justify-between w-full rounded-full border border-[#e5e5e5] bg-[#f5f5f5] px-4 py-2.5 text-xs font-medium text-black hover:bg-black hover:text-white transition group cursor-pointer"
+            >
+              <span>Explore 6-Factor Health Audit</span>
+              <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" />
+            </Link>
           </div>
         </div>
 
@@ -351,21 +432,49 @@ function DashboardPage() {
             </div>
           </section>
 
-          <section className="rounded-3xl bg-black p-7 text-white border border-[#262626] shadow-[0_18px_60px_rgba(0,0,0,.08)] flex flex-col justify-between">
-            <div>
-              <Sparkles className="size-5 text-white" />
-              <h2 className="mt-5 text-2xl font-medium tracking-[-.03em] text-white">A clearer next step.</h2>
-              <p className="mt-3 text-sm leading-6 text-[#a3a3a3]">
-                Your income is consistent, and your spending is stable. You could comfortably set aside ₹3,200 this month.
-              </p>
-            </div>
-            <button
-              onClick={goToInsights}
-              className="mt-7 inline-flex items-center gap-2 text-sm font-medium text-white hover:text-[#e5e5e5] transition group cursor-pointer self-start underline underline-offset-4"
-            >
-              Explore insights <ArrowRight className="size-4 transition group-hover:translate-x-1" />
-            </button>
-          </section>
+          <div className="space-y-6">
+            <section className="rounded-3xl bg-black p-7 text-white border border-[#262626] shadow-[0_18px_60px_rgba(0,0,0,.08)] flex flex-col justify-between">
+              <div>
+                <Sparkles className="size-5 text-white" />
+                <h2 className="mt-5 text-2xl font-medium tracking-[-.03em] text-white">A clearer next step.</h2>
+                <p className="mt-3 text-sm leading-6 text-[#a3a3a3]">
+                  Your income is consistent, and your spending is stable. You could comfortably set aside ₹3,200 this month.
+                </p>
+              </div>
+              <button
+                onClick={goToInsights}
+                className="mt-7 inline-flex items-center gap-2 text-sm font-medium text-white hover:text-[#e5e5e5] transition group cursor-pointer self-start underline underline-offset-4"
+              >
+                Explore insights <ArrowRight className="size-4 transition group-hover:translate-x-1" />
+              </button>
+            </section>
+
+            <section className="rounded-3xl border border-[#e5e5e5] bg-white p-7 shadow-sm flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="flex size-9 items-center justify-center rounded-xl bg-[#f5f5f5] border border-[#e5e5e5] text-black">
+                    <Award className="size-4.5" />
+                  </span>
+                  <span className="rounded-full bg-black text-white px-2.5 py-0.5 text-[11px] font-semibold">
+                    3 Eligible
+                  </span>
+                </div>
+                <h2 className="mt-4 text-xl font-medium tracking-[-.03em] text-black">
+                  Schemes & Welfare Benefits
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-[#737373]">
+                  Matched with e-Shram accident cover (₹2 Lakh), PM-SYM pension (₹3,000/mo), and TN Gig Welfare Board.
+                </p>
+              </div>
+              <Link
+                href="/schemes"
+                className="mt-6 inline-flex items-center justify-between w-full rounded-full border border-[#e5e5e5] bg-[#f5f5f5] px-4 py-2.5 text-xs font-medium text-black hover:bg-black hover:text-white transition group cursor-pointer"
+              >
+                <span>Browse Eligible Schemes</span>
+                <ArrowRight className="size-3.5 transition group-hover:translate-x-0.5" />
+              </Link>
+            </section>
+          </div>
         </div>
       </motion.div>
     </Shell>
