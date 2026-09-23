@@ -1,11 +1,55 @@
 import { NextResponse } from "next/server"
+import { createClient } from "@/lib/supabase/server"
+import type { ApiTransaction } from "@/lib/api"
 
-export async function GET() {
-  return NextResponse.json([
-    { id: "1", txn_date: "2026-09-18", description: "Swiggy Settlement", amount: 412, type: "DEBIT", category: "Food & dining", platform: "Swiggy" },
-    { id: "2", txn_date: "2026-09-17", description: "UPI Rider Payout", amount: 18500, type: "CREDIT", category: "Income", platform: "Zomato" },
-    { id: "3", txn_date: "2026-09-16", description: "Airtel Prepaid Recharge", amount: 299, type: "DEBIT", category: "Utilities", platform: null },
-    { id: "4", txn_date: "2026-09-14", description: "Amazon India Purchase", amount: 1299, type: "DEBIT", category: "Shopping", platform: null },
-    { id: "5", txn_date: "2026-09-12", description: "Uber Weekly Payout", amount: 14200, type: "CREDIT", category: "Income", platform: "Uber" }
-  ])
+export async function GET(request: Request) {
+  try {
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const platform = searchParams.get("platform")
+    const from = searchParams.get("from")
+    const to = searchParams.get("to")
+
+    let query = supabase
+      .from("transactions")
+      .select("id, txn_date, description, amount, type, category, platform")
+      .eq("user_id", user.id)
+      .order("txn_date", { ascending: false })
+
+    if (platform) {
+      query = query.ilike("platform", platform)
+    }
+    if (from) {
+      query = query.gte("txn_date", from)
+    }
+    if (to) {
+      query = query.lte("txn_date", to)
+    }
+
+    const { data, error } = await query
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    const transactions: ApiTransaction[] = (data || []).map((txn) => ({
+      id: txn.id,
+      txn_date: txn.txn_date,
+      description: txn.description,
+      amount: Number(txn.amount || 0),
+      type: (txn.type?.toUpperCase() === "CREDIT" ? "CREDIT" : "DEBIT") as "CREDIT" | "DEBIT",
+      category: txn.category || "General",
+      platform: txn.platform || null,
+    }))
+
+    return NextResponse.json(transactions)
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Failed to fetch transactions" }, { status: 500 })
+  }
 }

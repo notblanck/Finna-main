@@ -3,10 +3,13 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
-import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleHelp, Clock3, LockKeyhole, LogIn, ShieldCheck, Sparkles, WalletCards, Award, Activity, Landmark } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleHelp, Clock3, LockKeyhole, LogIn, ShieldCheck, Sparkles, WalletCards, Award, Activity, Landmark, Loader2, UserCheck } from "lucide-react"
 import { useConsent } from "./consent-provider"
 import { PredictiveInsights } from "./predictive-insights"
-import { formatSignedCurrency, getAccount, getTransactions, type Account, type Transaction } from "@/lib/mock-aa-data"
+import { finnaApi, type ApiAccount, type ApiTransaction } from "@/lib/api"
+import { createClient } from "@/lib/supabase/client"
+import { evaluateUserSchemes } from "@/lib/schemes/matcher"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Auth1 } from "@/components/auth/auth-1"
 
 import { Auth } from "@/components/ui/auth-form-1"
@@ -14,8 +17,49 @@ import { CashflowCalendar } from "./cashflow-calendar"
 
 const fade = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -12 }, transition: { duration: .35 } }
 
+const formatINR = (val: number) =>
+  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(val)
+
+const formatSigned = (amount: number, type: string) => {
+  const isCredit = type?.toUpperCase() === "CREDIT"
+  return `${isCredit ? "+" : "−"}${formatINR(amount)}`
+}
+
 function Logo() { return <div className="flex items-center gap-2.5 font-semibold tracking-tight"><span className="flex size-8 items-center justify-center rounded-xl bg-black text-white"><Sparkles className="size-4" /></span><span className="text-lg text-black">finna</span></div> }
 function Shell({ children, back = false, onBack }: { children: React.ReactNode; back?: boolean; onBack?: () => void }) {
+  const [navSchemesCount, setNavSchemesCount] = useState<number | null>(null)
+  const [navHealthScore, setNavHealthScore] = useState<number | null>(null)
+  const [navUser, setNavUser] = useState<any>(null)
+
+  useEffect(() => {
+    async function loadNavData() {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+          setNavUser(user)
+          const { data: profile } = await supabase.from("users").select("*").eq("id", user.id).maybeSingle()
+          const { eligible } = evaluateUserSchemes(profile || {})
+          setNavSchemesCount(eligible.length)
+
+          try {
+            const hs = await finnaApi.getHealthScore()
+            if (hs?.score) setNavHealthScore(hs.score)
+          } catch {
+            setNavHealthScore(72)
+          }
+        } else {
+          const { eligible } = evaluateUserSchemes({ city: "Chennai", state: "Tamil Nadu", platforms: ["swiggy", "uber"] })
+          setNavSchemesCount(eligible.length)
+          setNavHealthScore(72)
+        }
+      } catch {
+        // Fallback
+      }
+    }
+    loadNavData()
+  }, [])
+
   const handleBack = () => {
     if (onBack) {
       onBack()
@@ -55,23 +99,34 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
             <Link href="/insights" className="hover:text-black transition">Cashflow Calendar</Link>
             <Link href="/schemes" className="hover:text-black transition flex items-center gap-1.5">
               <span>Schemes & Welfare</span>
-              <span className="rounded-full bg-black px-1.5 py-0.5 text-[10px] text-white font-bold">3</span>
+              <span className="rounded-full bg-black px-1.5 py-0.5 text-[10px] text-white font-bold">
+                {navSchemesCount ?? 3}
+              </span>
             </Link>
             <Link href="/health-score" className="hover:text-black transition flex items-center gap-1.5">
               <span>Health Score</span>
-              <span className="rounded-full bg-[#f5f5f5] border border-[#e5e5e5] px-1.5 py-0.5 text-[10px] text-black font-semibold">72</span>
+              <span className="rounded-full bg-[#f5f5f5] border border-[#e5e5e5] px-1.5 py-0.5 text-[10px] text-black font-semibold">
+                {navHealthScore ?? 72}
+              </span>
             </Link>
             <Link href="/aa" className="hover:text-black transition">Bank Sync (AA)</Link>
           </nav>
         </div>
         <div className="flex items-center gap-4 text-xs text-[#737373]">
-          <button
-            onClick={navigateToLogin}
-            className="flex items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-white px-3.5 py-1.5 font-medium text-black hover:bg-[#f5f5f5] transition cursor-pointer"
-          >
-            <LogIn className="size-3.5 text-black" />
-            <span>Sign In</span>
-          </button>
+          {navUser ? (
+            <div className="flex items-center gap-2 rounded-full border border-[#e5e5e5] bg-[#fafafa] px-3.5 py-1.5 font-medium text-black">
+              <UserCheck className="size-3.5 text-black" />
+              <span>{navUser.user_metadata?.full_name?.split(" ")[0] || navUser.email?.split("@")[0] || "Account"}</span>
+            </div>
+          ) : (
+            <button
+              onClick={navigateToLogin}
+              className="flex items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-white px-3.5 py-1.5 font-medium text-black hover:bg-[#f5f5f5] transition cursor-pointer"
+            >
+              <LogIn className="size-3.5 text-black" />
+              <span>Sign In</span>
+            </button>
+          )}
           <div className="hidden sm:flex items-center gap-2 text-xs text-[#737373]">
             <LockKeyhole className="size-3.5 text-black" /> Private and secure
           </div>
@@ -307,20 +362,70 @@ function RetrievingPage() {
 }
 
 function DashboardPage() {
-  const [account, setAccount] = useState<Account | null>(null)
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [accounts, setAccounts] = useState<ApiAccount[]>([])
+  const [transactions, setTransactions] = useState<ApiTransaction[]>([])
+  const [healthScore, setHealthScore] = useState<number>(72)
+  const [healthBand, setHealthBand] = useState<string>("Good")
+  const [schemesCount, setSchemesCount] = useState<number>(3)
+  const [userName, setUserName] = useState<string>("Arun")
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([getAccount(), getTransactions()]).then(([a, t]) => {
-      setAccount(a)
-      setTransactions(t)
-    })
+    async function loadDashboard() {
+      setLoading(true)
+      setError(null)
+      try {
+        const [accsRes, txnsRes, hsRes, profRes] = await Promise.allSettled([
+          finnaApi.getAccounts(),
+          finnaApi.getTransactions(),
+          finnaApi.getHealthScore(),
+          finnaApi.getProfile(),
+        ])
+
+        if (accsRes.status === "fulfilled") {
+          setAccounts(accsRes.value)
+        }
+        if (txnsRes.status === "fulfilled") {
+          setTransactions(txnsRes.value)
+        }
+        if (hsRes.status === "fulfilled" && hsRes.value) {
+          const score = hsRes.value.score
+          setHealthScore(score)
+          if (score >= 80) setHealthBand("Strong")
+          else if (score >= 65) setHealthBand("Good")
+          else if (score >= 50) setHealthBand("Stable")
+          else setHealthBand("Needs Attention")
+        }
+        if (profRes.status === "fulfilled" && (profRes.value as any)?.user) {
+          const u = (profRes.value as any).user
+          if (u.full_name) {
+            setUserName(u.full_name.split(" ")[0])
+          }
+          const { eligible } = evaluateUserSchemes(u)
+          if (eligible) {
+            setSchemesCount(eligible.length)
+          }
+        }
+      } catch (err: any) {
+        console.error("Dashboard data load error:", err)
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadDashboard()
   }, [])
 
   const goToInsights = () => {
     window.history.pushState({}, "", "/insights")
     window.dispatchEvent(new PopStateEvent("popstate"))
   }
+
+  const primaryAccount = accounts[0]
+  const totalBalance = accounts.length > 0
+    ? accounts.reduce((sum, a) => sum + a.balance, 0)
+    : 42680
 
   return (
     <Shell>
@@ -330,7 +435,9 @@ function DashboardPage() {
             <Pill>
               <ShieldCheck className="size-3.5" /> Connected securely
             </Pill>
-            <h1 className="mt-5 text-4xl font-medium tracking-[-.05em] md:text-6xl text-black">Good morning, Arun.</h1>
+            <h1 className="mt-5 text-4xl font-medium tracking-[-.05em] md:text-6xl text-black">
+              Good morning, {userName}.
+            </h1>
             <p className="mt-3 text-sm text-[#737373]">Here is your financial picture, in one clear view.</p>
           </div>
           <button className="flex items-center gap-2 self-start rounded-full border border-[#e5e5e5] bg-white px-4 py-2.5 text-sm text-black hover:bg-[#f5f5f5] transition cursor-pointer">
@@ -341,7 +448,7 @@ function DashboardPage() {
         {/* 3 Core Pillars: Bank Data, Financial Health, Welfare Schemes */}
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {/* Pillar 1: Total Balance & Bank Feed */}
-          <div className="rounded-3xl bg-black p-6 text-white flex flex-col justify-between shadow-sm">
+          <div className="rounded-3xl bg-black p-6 text-white flex flex-col justify-between shadow-sm min-h-[220px]">
             <div>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[#a3a3a3]">Total balance</p>
@@ -349,10 +456,21 @@ function DashboardPage() {
                   <Landmark className="size-3" /> AA Synced
                 </span>
               </div>
-              <p className="mt-3 text-4xl font-medium tracking-[-.04em]">{account?.balance ?? "₹42,681"}</p>
-              <p className="mt-3 text-xs text-[#a3a3a3]">
-                {account?.bank ?? "State Bank of India"} · Updated just now
-              </p>
+              {loading ? (
+                <div className="mt-4 space-y-2">
+                  <Skeleton className="h-10 w-44 bg-neutral-800" />
+                  <Skeleton className="h-4 w-32 bg-neutral-800" />
+                </div>
+              ) : (
+                <>
+                  <p className="mt-3 text-4xl font-medium tracking-[-.04em]">
+                    {accounts.length > 0 ? formatINR(totalBalance) : "₹42,680"}
+                  </p>
+                  <p className="mt-3 text-xs text-[#a3a3a3]">
+                    {primaryAccount ? `${primaryAccount.bank_name} (${primaryAccount.masked_account})` : "State Bank of India · Synced"}
+                  </p>
+                </>
+              )}
             </div>
             <Link
               href="/aa"
@@ -364,19 +482,31 @@ function DashboardPage() {
           </div>
 
           {/* Pillar 2: Financial Health Score */}
-          <div className="rounded-3xl border border-[#e5e5e5] bg-white p-6 shadow-sm flex flex-col justify-between">
+          <div className="rounded-3xl border border-[#e5e5e5] bg-white p-6 shadow-sm flex flex-col justify-between min-h-[220px]">
             <div>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[#737373]">Financial health</p>
                 <span className="rounded-full bg-[#f5f5f5] border border-[#e5e5e5] px-2 py-0.5 text-[10px] font-semibold text-black">
-                  72 / 100
+                  {loading ? "--" : `${healthScore} / 100`}
                 </span>
               </div>
-              <p className="mt-3 text-4xl font-medium text-black">Good</p>
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#e5e5e5]">
-                <div className="h-full w-[72%] rounded-full bg-black" />
-              </div>
-              <p className="mt-3 text-xs text-[#737373]">Building steadily · 6-factor audit</p>
+              {loading ? (
+                <div className="mt-4 space-y-2">
+                  <Skeleton className="h-10 w-28 bg-[#e5e5e5]" />
+                  <Skeleton className="h-2 w-full bg-[#e5e5e5]" />
+                </div>
+              ) : (
+                <>
+                  <p className="mt-3 text-4xl font-medium text-black">{healthBand}</p>
+                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#e5e5e5]">
+                    <div
+                      className="h-full rounded-full bg-black transition-all duration-500"
+                      style={{ width: `${Math.min(100, Math.max(5, healthScore))}%` }}
+                    />
+                  </div>
+                  <p className="mt-3 text-xs text-[#737373]">Building steadily · 6-factor audit</p>
+                </>
+              )}
             </div>
             <Link
               href="/health-score"
@@ -388,18 +518,27 @@ function DashboardPage() {
           </div>
 
           {/* Pillar 3: Welfare Schemes */}
-          <div className="rounded-3xl border border-[#e5e5e5] bg-white p-6 shadow-sm flex flex-col justify-between">
+          <div className="rounded-3xl border border-[#e5e5e5] bg-white p-6 shadow-sm flex flex-col justify-between min-h-[220px]">
             <div>
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[#737373]">Welfare & Schemes</p>
                 <span className="rounded-full bg-black text-white px-2 py-0.5 text-[10px] font-semibold">
-                  3 Matched
+                  {loading ? "--" : `${schemesCount} Matched`}
                 </span>
               </div>
-              <p className="mt-3 text-4xl font-medium text-black">Eligible</p>
-              <p className="mt-4 text-xs text-[#737373] line-clamp-2">
-                e-Shram, PM-SYM Pension (₹3k/mo) & TN Gig Board benefits.
-              </p>
+              {loading ? (
+                <div className="mt-4 space-y-2">
+                  <Skeleton className="h-10 w-28 bg-[#e5e5e5]" />
+                  <Skeleton className="h-4 w-full bg-[#e5e5e5]" />
+                </div>
+              ) : (
+                <>
+                  <p className="mt-3 text-4xl font-medium text-black">Eligible</p>
+                  <p className="mt-4 text-xs text-[#737373] line-clamp-2">
+                    e-Shram, PM-SYM Pension (₹3k/mo) & TN Gig Board benefits.
+                  </p>
+                </>
+              )}
             </div>
             <Link
               href="/schemes"
@@ -415,26 +554,47 @@ function DashboardPage() {
           <section className="rounded-3xl border border-[#e5e5e5] bg-white p-6 md:p-7 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="font-medium text-black">Recent activity</h2>
-              <span className="text-xs text-[#737373]">{account?.bank}</span>
+              <span className="text-xs text-[#737373]">{primaryAccount?.bank_name || "Bank Feed"}</span>
             </div>
             <div className="mt-4">
-              {transactions.map((transaction) => (
-                <div key={transaction.id} className="flex items-center justify-between border-t border-[#e5e5e5] py-4">
-                  <div>
-                    <p className="text-sm font-medium text-black">{transaction.merchant}</p>
-                    <p className="mt-1 text-xs text-[#737373]">
-                      {transaction.category} · {transaction.date}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-sm font-semibold ${
-                      transaction.type === "credit" ? "text-black" : "text-[#525252]"
-                    }`}
-                  >
-                    {formatSignedCurrency(transaction.amount, transaction.type)}
-                  </span>
+              {loading ? (
+                <div className="space-y-4 py-2">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div key={i} className="flex items-center justify-between border-t border-[#e5e5e5] py-4">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="h-3 w-28" />
+                      </div>
+                      <Skeleton className="h-5 w-20" />
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : transactions.length === 0 ? (
+                <div className="py-8 text-center text-sm text-[#737373]">
+                  <p>No recent transactions synced yet.</p>
+                  <Link href="/aa" className="mt-2 inline-block text-xs font-semibold text-black underline">
+                    Connect Account Aggregator to sync live statement →
+                  </Link>
+                </div>
+              ) : (
+                transactions.slice(0, 5).map((transaction) => (
+                  <div key={transaction.id} className="flex items-center justify-between border-t border-[#e5e5e5] py-4">
+                    <div>
+                      <p className="text-sm font-medium text-black">{transaction.description}</p>
+                      <p className="mt-1 text-xs text-[#737373]">
+                        {transaction.category} · {transaction.txn_date}
+                      </p>
+                    </div>
+                    <span
+                      className={`text-sm font-semibold ${
+                        transaction.type === "CREDIT" ? "text-black" : "text-[#525252]"
+                      }`}
+                    >
+                      {formatSigned(transaction.amount, transaction.type)}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </section>
 

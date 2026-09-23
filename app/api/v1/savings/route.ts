@@ -4,20 +4,10 @@ import { createClient } from "@/lib/supabase/server"
 export async function GET() {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    if (!user) {
-      return NextResponse.json({
-        buckets: [
-          { id: "b1", name: "Emergency Buffer", target_amount: 25000, current_amount: 14200 },
-          { id: "b2", name: "Vehicle Maintenance & Tires", target_amount: 8000, current_amount: 5400 },
-          { id: "b3", name: "Festival & Family Reserve", target_amount: 15000, current_amount: 6200 },
-        ],
-        rules: [
-          { id: "r1", rule_type: "Daily Micro-Savings", percentage: 10, trigger_event: "payout", is_active: true },
-          { id: "r2", rule_type: "Weekend Surge Auto-Stash", percentage: 15, trigger_event: "weekend_surge", is_active: true }
-        ]
-      })
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { data: buckets } = await supabase
