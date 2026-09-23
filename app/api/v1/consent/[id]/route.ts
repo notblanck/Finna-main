@@ -1,12 +1,11 @@
-import { NextResponse } from "next/server"
+import { GET as getAAConsentStatus } from "@/app/api/aa/consent/[id]/status/route"
+
+export const preferredRegion = "bom1"
+export const runtime = "nodejs"
 
 export async function GET(
   request: Request,
-  { params }: { params: Promise<{ id: string }> }
+  context: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
-  return NextResponse.json({
-    consentId: id,
-    status: "APPROVED"
-  })
+  return getAAConsentStatus(request, context)
 }

@@ -1,14 +1,8 @@
-import { NextResponse } from "next/server"
+import { POST as createAAConsent } from "@/app/api/aa/consent/route"
+
+export const preferredRegion = "bom1"
+export const runtime = "nodejs"
 
 export async function POST(request: Request) {
-  try {
-    const consentId = `CONSENT-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
-    return NextResponse.json({
-      consentId,
-      status: "PENDING",
-      url: `/mock-aa/authorize?consentId=${consentId}`
-    })
-  } catch (err: any) {
-    return NextResponse.json({ error: "Failed to create consent", message: err.message }, { status: 500 })
-  }
+  return createAAConsent(request)
 }

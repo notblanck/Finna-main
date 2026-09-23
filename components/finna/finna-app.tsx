@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
 import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleHelp, Clock3, LockKeyhole, LogIn, ShieldCheck, Sparkles, WalletCards, Award, Activity, Landmark, Loader2, UserCheck } from "lucide-react"
-import { useConsent } from "./consent-provider"
 import { PredictiveInsights } from "./predictive-insights"
 import { finnaApi, type ApiAccount, type ApiTransaction } from "@/lib/api"
 import { createClient } from "@/lib/supabase/client"
@@ -146,12 +145,6 @@ function Pill({ children }: { children: React.ReactNode }) {
 }
 
 function ConsentPage() {
-  const { consent, giveConsent, cancelConsent } = useConsent()
-  const start = () => {
-    giveConsent()
-    window.history.pushState({}, "", "/mock-aa/authorize")
-    window.dispatchEvent(new PopStateEvent("popstate"))
-  }
   return (
     <Shell>
       <motion.div {...fade} className="mx-auto grid max-w-5xl gap-10 pt-12 lg:grid-cols-[1.1fr_.9fr] lg:pt-20">
@@ -166,18 +159,18 @@ function ConsentPage() {
             FINNA uses your consented financial data to help you understand your money and make better decisions. You stay in control, always.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <button
-              onClick={start}
+            <Link
+              href="/aa"
               className="group inline-flex items-center gap-3 rounded-full bg-black px-5 py-3.5 text-sm font-medium text-white transition hover:bg-[#262626]"
             >
               Review and give consent <ArrowRight className="size-4 transition group-hover:translate-x-1" />
-            </button>
-            <button
-              onClick={cancelConsent}
+            </Link>
+            <Link
+              href="/dashboard"
               className="rounded-full border border-[#e5e5e5] px-5 py-3.5 text-sm text-[#737373] hover:text-black hover:bg-[#f5f5f5] transition"
             >
               Not now
-            </button>
+            </Link>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2.5 pt-4 border-t border-[#e5e5e5]">
             <span className="text-xs text-[#737373]">Direct Explore:</span>
@@ -209,9 +202,15 @@ function ConsentPage() {
             </div>
           </div>
           <div className="my-7 h-px bg-[#e5e5e5]" />
-          <p className="text-sm leading-6 text-[#737373]">{consent.purpose}</p>
+          <p className="text-sm leading-6 text-[#737373]">
+            To build your financial health score, forecast upcoming cashflows, and unlock curated welfare schemes and credit lines.
+          </p>
           <div className="mt-7 space-y-4">
-            {consent.dataTypes.map((item) => (
+            {[
+              "Profile & Account Information",
+              "Deposit Account Summary",
+              "Transaction History (Credits & Debits)"
+            ].map((item) => (
               <div key={item} className="flex items-center gap-3 text-sm text-black">
                 <span className="flex size-6 items-center justify-center rounded-full bg-black text-white">
                   <Check className="size-3.5" />
@@ -222,141 +221,17 @@ function ConsentPage() {
           </div>
           <div className="mt-8 flex items-center justify-between border-t border-[#e5e5e5] pt-5 text-xs text-[#737373]">
             <span>Access duration</span>
-            <strong className="font-medium text-black">{consent.duration}</strong>
+            <strong className="font-medium text-black">1 year (recurring)</strong>
           </div>
           <div className="mt-3 flex items-center justify-between text-xs text-[#737373]">
-            <span>Consent ID</span>
-            <code className="text-[10px] text-[#525252] bg-[#f5f5f5] px-1.5 py-0.5 rounded">{consent.id}</code>
+            <span>Provider</span>
+            <span className="text-xs font-semibold text-black">RBI-Regulated Setu AA Gateway</span>
           </div>
         </section>
       </motion.div>
       <div className="mx-auto mt-14 flex max-w-5xl items-center gap-3 text-xs text-[#737373]">
-        <CircleHelp className="size-4" /> You can revoke this consent anytime from your FINNA profile.
+        <CircleHelp className="size-4" /> You can revoke this consent anytime from your Account Aggregator portal.
       </div>
-    </Shell>
-  )
-}
-
-function AuthorizePage() {
-  const { consent, approveConsent } = useConsent()
-  const approve = () => {
-    approveConsent()
-    window.history.pushState({}, "", "/mock-aa/retrieving")
-    window.dispatchEvent(new PopStateEvent("popstate"))
-  }
-  return (
-    <Shell back onBack={() => {
-      window.history.pushState({}, "", "/consent")
-      window.dispatchEvent(new PopStateEvent("popstate"))
-    }}>
-      <motion.div {...fade} className="mx-auto max-w-3xl pt-10 md:pt-20">
-        <div className="mx-auto max-w-lg rounded-[2rem] border border-[#e5e5e5] bg-white p-7 shadow-[0_18px_60px_rgba(0,0,0,.06)] md:p-10">
-          <div className="flex items-center justify-between border-b border-[#e5e5e5] pb-6">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-black text-white">
-                <WalletCards className="size-5" />
-              </div>
-              <div>
-                <p className="text-[10px] uppercase tracking-[.18em] text-[#737373]">Sandbox</p>
-                <p className="font-medium text-black">Account Aggregator</p>
-              </div>
-            </div>
-            <span className="rounded-full bg-[#f5f5f5] border border-[#e5e5e5] px-2.5 py-1 text-[10px] font-semibold text-black">TEST MODE</span>
-          </div>
-          <div className="py-8 text-center">
-            <div className="mx-auto flex size-16 items-center justify-center rounded-full bg-[#f5f5f5] border border-[#e5e5e5] text-black">
-              <ShieldCheck className="size-8" />
-            </div>
-            <h1 className="mt-5 text-3xl font-medium tracking-[-.04em] text-black">Link your account</h1>
-            <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-[#737373]">
-              FINNA is requesting temporary access to your financial information through a secure, regulated connection.
-            </p>
-          </div>
-          <div className="rounded-2xl bg-[#f5f5f5] border border-[#e5e5e5] p-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-[#737373]">Data requested</span>
-              <span className="font-medium text-black">3 categories</span>
-            </div>
-            <div className="mt-3 flex items-center justify-between text-sm">
-              <span className="text-[#737373]">For</span>
-              <span className="font-medium text-black">{consent.duration}</span>
-            </div>
-          </div>
-          <button
-            onClick={approve}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-full bg-black py-3.5 text-sm font-medium text-white hover:bg-[#262626] transition"
-          >
-            Approve &amp; link account <ArrowRight className="size-4" />
-          </button>
-          <p className="mt-5 text-center text-[11px] leading-5 text-[#737373]">
-            By continuing, you agree to share this information with FINNA. Your data is encrypted end-to-end.
-          </p>
-        </div>
-      </motion.div>
-    </Shell>
-  )
-}
-
-function RetrievingPage() {
-  const [step, setStep] = useState(0)
-  const steps = ["Verifying consent", "Connecting to your bank", "Retrieving transactions", "Building your financial picture"]
-
-  useEffect(() => {
-    const timer = setInterval(() => setStep((s) => Math.min(s + 1, steps.length)), 950)
-    return () => clearInterval(timer)
-  }, [steps.length])
-
-  useEffect(() => {
-    if (step === steps.length) {
-      const timer = setTimeout(() => {
-        window.history.pushState({}, "", "/dashboard")
-        window.dispatchEvent(new PopStateEvent("popstate"))
-      }, 900)
-      return () => clearTimeout(timer)
-    }
-  }, [step, steps.length])
-
-  return (
-    <Shell>
-      <motion.div {...fade} className="mx-auto max-w-2xl pt-14 text-center md:pt-24">
-        <Pill>
-          <Clock3 className="size-3.5" /> Secure retrieval in progress
-        </Pill>
-        <h1 className="mt-6 text-4xl font-medium tracking-[-.05em] md:text-6xl text-black">
-          Making sense of your <em className="font-display font-normal">money.</em>
-        </h1>
-        <p className="mx-auto mt-5 max-w-md text-sm leading-6 text-[#737373]">
-          Your data is being securely retrieved and organized. This usually takes a few moments.
-        </p>
-        <div className="mx-auto mt-12 max-w-md text-left">
-          {steps.map((item, index) => (
-            <div key={item} className="flex items-center gap-4 border-b border-[#e5e5e5] py-4">
-              <span
-                className={`flex size-8 items-center justify-center rounded-full text-xs font-medium ${
-                  index < step
-                    ? "bg-black text-white"
-                    : index === step
-                    ? "border border-black bg-white text-black font-bold"
-                    : "bg-[#f5f5f5] text-[#a3a3a3]"
-                }`}
-              >
-                {index < step ? <Check className="size-4" /> : index + 1}
-              </span>
-              <span className={index <= step ? "text-sm font-medium text-black" : "text-sm text-[#a3a3a3]"}>
-                {item}
-              </span>
-              {index === step && step < steps.length && (
-                <motion.span
-                  animate={{ opacity: [0.3, 1, 0.3] }}
-                  transition={{ repeat: Infinity, duration: 1.2 }}
-                  className="ml-auto size-1.5 rounded-full bg-black"
-                />
-              )}
-            </div>
-          ))}
-        </div>
-        <p className="mt-10 text-xs text-[#737373]">This page is a simulated Account Aggregator connection.</p>
-      </motion.div>
     </Shell>
   )
 }
@@ -659,10 +534,6 @@ export function FinnaApp() {
               }}
             />
           </div>
-        ) : path === "/mock-aa/authorize" ? (
-          <AuthorizePage />
-        ) : path === "/mock-aa/retrieving" ? (
-          <RetrievingPage />
         ) : path === "/insights" || path === "/dashboard/insights" ? (
           <InsightsPage />
         ) : path === "/dashboard" ? (
