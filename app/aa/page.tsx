@@ -84,6 +84,14 @@ export default function AccountAggregatorPage() {
   // Load existing active consent from localStorage
   React.useEffect(() => {
     try {
+      const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null
+      if (urlParams?.get("new") === "true" || urlParams?.get("fresh") === "true") {
+        localStorage.removeItem("finna_active_aa_consent")
+        setActiveConsent(null)
+        setStep("init")
+        return
+      }
+
       const saved = localStorage.getItem("finna_active_aa_consent")
       if (saved) {
         const parsed = JSON.parse(saved)
@@ -807,6 +815,27 @@ export default function AccountAggregatorPage() {
         {/* STEP 6: Active AA Consent Manager */}
         {step === "active" && (
           <section className="rounded-3xl border border-[#e5e5e5] bg-white p-6 sm:p-10 shadow-sm space-y-8">
+            {activeConsent?.consentHandle?.startsWith("AA-SETU-DEMO-") && (
+              <div className="p-4 rounded-2xl bg-black text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div>
+                  <span className="font-bold block">Simulated Demo Account Active</span>
+                  <span className="text-[#a3a3a3]">
+                    You are currently previewing mock bank data. Ready to link your real bank via Setu Sandbox OTP?
+                  </span>
+                </div>
+                <Button
+                  onClick={() => {
+                    localStorage.removeItem("finna_active_aa_consent")
+                    setActiveConsent(null)
+                    setStep("init")
+                  }}
+                  className="bg-white text-black hover:bg-[#e5e5e5] rounded-xl h-9 px-4 font-semibold text-xs whitespace-nowrap cursor-pointer shrink-0"
+                >
+                  Connect Real Bank via Setu →
+                </Button>
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3.5">
                 <span className="flex size-11 rounded-2xl bg-black text-white items-center justify-center">
@@ -854,13 +883,26 @@ export default function AccountAggregatorPage() {
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              <Button
-                variant="outline"
-                onClick={handleRevoke}
-                className="rounded-xl border-[#e5e5e5] text-xs h-11 px-4 text-[#737373] hover:text-black hover:border-black cursor-pointer inline-flex items-center gap-2"
-              >
-                <Trash2 className="size-3.5" /> Revoke Consent Immediately
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handleRevoke}
+                  className="rounded-xl border-[#e5e5e5] text-xs h-11 px-4 text-[#737373] hover:text-black hover:border-black cursor-pointer inline-flex items-center gap-2"
+                >
+                  <Trash2 className="size-3.5" /> Revoke Consent
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    localStorage.removeItem("finna_active_aa_consent")
+                    setActiveConsent(null)
+                    setStep("init")
+                  }}
+                  className="rounded-xl border-[#e5e5e5] text-xs h-11 px-4 text-black hover:border-black cursor-pointer inline-flex items-center gap-2"
+                >
+                  <Plus className="size-3.5" /> Link New Bank Account
+                </Button>
+              </div>
               <div className="flex items-center gap-3">
                 <Button
                   variant="outline"
