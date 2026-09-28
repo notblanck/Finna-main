@@ -9,8 +9,15 @@ export const runtime = "nodejs"
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}))
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    let supabase: any = null
+    let user: any = null
+    try {
+      supabase = await createClient()
+      const { data } = await supabase.auth.getUser()
+      user = data?.user || null
+    } catch (authErr: any) {
+      console.warn("[Next.js AA Consent API] Supabase auth notice:", authErr.message)
+    }
 
     const phone = body.phone || body.phoneNumber || user?.phone || "+919876543210"
     const vpa = body.vpa || (phone ? `${phone.replace(/^\+91/, "")}@setu` : "9876543210@setu")
@@ -61,27 +68,29 @@ export async function POST(request: Request) {
 
     // Store in Supabase `aa_consents`
     let record = null
-    try {
-      const { data, error } = await supabase
-        .from("aa_consents")
-        .insert({
-          user_id: user?.id || null,
-          consent_id: consentId,
-          status: consentRes.status || "PENDING",
-          purpose,
-          url,
-          txnid: consentRes.consentHandle || consentRes.txnid,
-          vpa,
-          raw_response: consentRes.raw || null
-        })
-        .select()
-        .single()
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from("aa_consents")
+          .insert({
+            user_id: user?.id || null,
+            consent_id: consentId,
+            status: consentRes.status || "PENDING",
+            purpose,
+            url,
+            txnid: consentRes.consentHandle || consentRes.txnid,
+            vpa,
+            raw_response: consentRes.raw || null
+          })
+          .select()
+          .single()
 
-      if (!error) {
-        record = data
+        if (!error) {
+          record = data
+        }
+      } catch (dbErr: any) {
+        console.warn("[Next.js AA Consent API] DB insert notice:", dbErr.message)
       }
-    } catch (dbErr: any) {
-      console.warn("[Next.js AA Consent API] DB insert notice:", dbErr.message)
     }
 
     return NextResponse.json({

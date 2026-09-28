@@ -12,6 +12,16 @@ export async function GET(
   try {
     const { id } = await params
 
+    if (id.startsWith("AA-SETU-DEMO-") || id.startsWith("consent-mock-") || process.env.USE_MOCK_AA === "true") {
+      return NextResponse.json({
+        success: true,
+        consentId: id,
+        status: "APPROVED",
+        url: `/aa?consentId=${id}&mockApproved=true`,
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      })
+    }
+
     let statusRes: any
     try {
       statusRes = await setuAA.getConsentStatus(id)

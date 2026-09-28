@@ -176,6 +176,10 @@ export default function AccountAggregatorPage() {
           err.message ||
           "Setu Sandbox Credentials Required: Please add SETU_CLIENT_ID, SETU_CLIENT_SECRET, and SETU_PRODUCT_INSTANCE_ID to your .env file."
         )
+      } else if (err.message?.includes("Invalid FIType") || err.message?.includes("upstream")) {
+        setConfigError(
+          "Setu Sandbox notice: Your Setu product instance on bridge.setu.co is not yet configured for Bank Deposit (DEPOSIT) data. You can click 'Quick Demo (Simulate Approval)' below to test the full live data aggregation flow immediately, or enable DEPOSIT under your Sandbox Product Instance in Setu Bridge."
+        )
       } else {
         setConfigError(`Failed to connect to Setu AA Sandbox: ${err.message}`)
       }

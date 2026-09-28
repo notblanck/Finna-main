@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { setuAA, SetuConfigurationError } from "@/lib/aa/setu-aa"
+import { mockAA } from "@/lib/aa/mock-aa"
 import { createClient } from "@/lib/supabase/server"
 import { proxyToBackend, isCloudflareBlock } from "@/lib/aa/proxy"
 export const preferredRegion = "bom1"
@@ -11,50 +12,63 @@ export async function GET(
 ) {
   try {
     const { id: sessionId } = await params
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    let supabase: any = null
+    let user: any = null
+    try {
+      supabase = await createClient()
+      const { data } = await supabase.auth.getUser()
+      user = data?.user || null
+    } catch (authErr: any) {
+      console.warn("[Next.js AA Session Data] Supabase auth notice:", authErr.message)
+    }
 
     let fiData: any
-    try {
-      fiData = await setuAA.fetchSessionData(sessionId)
-    } catch (apiErr: any) {
-      if (apiErr instanceof SetuConfigurationError || apiErr.name === "SetuConfigurationError") {
-        return NextResponse.json({
-          error: "Setu Configuration Error",
-          message: apiErr.message,
-          missingConfig: true,
-          docs: "https://bridge.setu.co"
-        }, { status: 503 })
-      }
-
-      // Fallback: proxy through Express backend if Setu blocked this IP
-      if (isCloudflareBlock(apiErr)) {
-        console.log("[Next.js AA Session Data] Setu WAF block detected, proxying through Express backend...")
-        try {
-          const proxyRes = await proxyToBackend(`/session/${sessionId}`)
-          const proxyJson = await proxyRes.json()
-          return NextResponse.json(proxyJson, { status: proxyRes.status })
-        } catch (proxyErr: any) {
-          console.error("[Next.js AA Session Data] Proxy fallback also failed:", proxyErr.message)
-          throw apiErr
+    if (sessionId.startsWith("session-mock-") || sessionId.startsWith("AA-SETU-DEMO-") || process.env.USE_MOCK_AA === "true") {
+      fiData = await mockAA.fetchFIData(sessionId)
+    } else {
+      try {
+        fiData = await setuAA.fetchSessionData(sessionId)
+      } catch (apiErr: any) {
+        if (apiErr instanceof SetuConfigurationError || apiErr.name === "SetuConfigurationError") {
+          return NextResponse.json({
+            error: "Setu Configuration Error",
+            message: apiErr.message,
+            missingConfig: true,
+            docs: "https://bridge.setu.co"
+          }, { status: 503 })
         }
-      }
 
-      throw apiErr
+        // Fallback: proxy through Express backend if Setu blocked this IP
+        if (isCloudflareBlock(apiErr)) {
+          console.log("[Next.js AA Session Data] Setu WAF block detected, proxying through Express backend...")
+          try {
+            const proxyRes = await proxyToBackend(`/session/${sessionId}`)
+            const proxyJson = await proxyRes.json()
+            return NextResponse.json(proxyJson, { status: proxyRes.status })
+          } catch (proxyErr: any) {
+            console.error("[Next.js AA Session Data] Proxy fallback also failed:", proxyErr.message)
+            throw apiErr
+          }
+        }
+
+        throw apiErr
+      }
     }
 
     // Update `aa_data_sessions`
-    try {
-      await supabase
-        .from("aa_data_sessions")
-        .update({
-          status: "COMPLETED",
-          fetched_at: new Date().toISOString(),
-          raw_payload: fiData.raw || null
-        })
-        .eq("session_id", sessionId)
-    } catch (dbErr: any) {
-      console.warn("[Next.js AA Session GET API] DB update notice:", dbErr.message)
+    if (supabase) {
+      try {
+        await supabase
+          .from("aa_data_sessions")
+          .update({
+            status: "COMPLETED",
+            fetched_at: new Date().toISOString(),
+            raw_payload: fiData.raw || null
+          })
+          .eq("session_id", sessionId)
+      } catch (dbErr: any) {
+        console.warn("[Next.js AA Session GET API] DB update notice:", dbErr.message)
+      }
     }
 
     const upsertedAccounts: any[] = []
@@ -62,7 +76,7 @@ export async function GET(
     const syncedIncomeEntries: any[] = []
     const syncedExpenses: any[] = []
 
-    if (user) {
+    if (supabase && user) {
       // 1. Upsert Accounts into `public.accounts`
       for (const acc of fiData.accounts) {
         try {
