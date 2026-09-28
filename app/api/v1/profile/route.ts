@@ -5,50 +5,53 @@ import { createClient } from "@/lib/supabase/server"
 export async function GET() {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    if (!user) {
-      // Fallback default demo profile if unauthenticated
-      return NextResponse.json({
-        user: {
-          id: "demo-user",
-          full_name: "Arun Kumar",
-          phone: "+91 98765 43210",
-          city: "Chennai",
-          state: "Tamil Nadu",
-          preferred_language: "en",
-          onboarding_complete: true,
-        },
-        linked_platforms: [
-          { platform: "uber", is_primary: true, avg_monthly_earning: 18000 },
-          { platform: "swiggy", is_primary: false, avg_monthly_earning: 14000 }
-        ],
-        active_consent: {
-          consent_ref: "CONSENT-DEMO2026",
-          status: "APPROVED",
-          expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
-        }
-      })
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const { data: userProfile } = await supabase
       .from("users")
       .select("*")
       .eq("id", user.id)
-      .single()
+      .maybeSingle()
 
     const { data: platforms } = await supabase
       .from("user_platforms")
       .select("*")
       .eq("user_id", user.id)
 
-    const { data: consent } = await supabase
-      .from("consents")
+    // Check aa_consents first (Setu real flow), fallback to consents table
+    let activeConsent: any = null
+    const { data: aaConsent } = await supabase
+      .from("aa_consents")
       .select("*")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
+
+    if (aaConsent) {
+      activeConsent = {
+        consent_ref: aaConsent.consent_id,
+        status: aaConsent.status,
+        expires_at: aaConsent.updated_at,
+        provider: "setu",
+        url: aaConsent.url
+      }
+    } else {
+      const { data: consent } = await supabase
+        .from("consents")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (consent) {
+        activeConsent = consent
+      }
+    }
 
     return NextResponse.json({
       user: userProfile || {
@@ -59,7 +62,7 @@ export async function GET() {
         onboarding_complete: false,
       },
       linked_platforms: platforms || [],
-      active_consent: consent || null,
+      active_consent: activeConsent,
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })

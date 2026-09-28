@@ -3,19 +3,18 @@
 import { useEffect, useMemo, useState } from "react"
 import { ArrowRight, BrainCircuit, Check, Loader2, TrendingDown, TrendingUp } from "lucide-react"
 import { motion } from "framer-motion"
-import { getTransactions, type Transaction } from "@/lib/mock-aa-data"
-import { finnaApi } from "@/lib/api"
+import { finnaApi, type ApiTransaction } from "@/lib/api"
 
 type Horizon = "7d" | "30d"
 type Forecast = { horizon: Horizon; expected_income: number; expected_expenses: number; expected_savings: number; confidence: string; model: string; sample_days: number }
 
 const money = (value: number) => `₹${Math.round(value).toLocaleString("en-IN")}`
 
-function fallbackForecast(transactions: Transaction[], horizon: Horizon): Forecast {
+function fallbackForecast(transactions: ApiTransaction[], horizon: Horizon): Forecast {
   const days = horizon === "7d" ? 7 : 30
-  const income = transactions.filter((t) => t.type === "credit").reduce((sum, t) => sum + Number(t.amount), 0)
-  const expenses = transactions.filter((t) => t.type === "debit").reduce((sum, t) => sum + Number(t.amount), 0)
-  const periods = Math.max(1, new Set(transactions.map((t) => t.date)).size / 7)
+  const income = transactions.filter((t) => t.type.toUpperCase() === "CREDIT").reduce((sum, t) => sum + Number(t.amount), 0)
+  const expenses = transactions.filter((t) => t.type.toUpperCase() === "DEBIT").reduce((sum, t) => sum + Number(t.amount), 0)
+  const periods = Math.max(1, new Set(transactions.map((t) => t.txn_date)).size / 7)
   const expectedIncome = income / periods * (days / 7)
   const expectedExpenses = expenses / periods * (days / 7)
   return { horizon, expected_income: expectedIncome, expected_expenses: expectedExpenses, expected_savings: expectedIncome - expectedExpenses, confidence: "medium", model: "XGBoost regression", sample_days: Math.round(periods * 7) }
@@ -25,9 +24,11 @@ export function PredictiveInsights() {
   const [horizon, setHorizon] = useState<Horizon>("7d")
   const [forecast, setForecast] = useState<Forecast | null>(null)
   const [loading, setLoading] = useState(true)
-  const [transactions, setTransactions] = useState<Transaction[]>([])
+  const [transactions, setTransactions] = useState<ApiTransaction[]>([])
 
-  useEffect(() => { getTransactions().then(setTransactions) }, [])
+  useEffect(() => {
+    finnaApi.getTransactions().then(setTransactions).catch(() => setTransactions([]))
+  }, [])
   useEffect(() => {
     let active = true
     setLoading(true)

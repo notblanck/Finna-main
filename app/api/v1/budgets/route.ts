@@ -4,26 +4,46 @@ import { createClient } from "@/lib/supabase/server"
 export async function GET() {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-    if (!user) {
-      return NextResponse.json({
-        budgets: [
-          { category: "Fuel", allocated_amount: 6000, spent: 4120, safe_to_spend_daily: 120 },
-          { category: "Food & Snacks", allocated_amount: 4500, spent: 2890, safe_to_spend_daily: 95 },
-          { category: "Vehicle EMI & Service", allocated_amount: 5200, spent: 5200, safe_to_spend_daily: 0 },
-        ]
-      })
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { data, error } = await supabase
+    const { data: budgets, error } = await supabase
       .from("budgets")
       .select("*")
       .eq("user_id", user.id)
 
     if (error) throw error
 
-    return NextResponse.json({ budgets: data || [] })
+    // Fetch this month's expenses to calculate actual spent per category
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+      .toISOString()
+      .split("T")[0]
+
+    const { data: expenses } = await supabase
+      .from("expenses")
+      .select("category, amount")
+      .eq("user_id", user.id)
+      .gte("date", startOfMonth)
+
+    const spentByCategory: Record<string, number> = {}
+    ;(expenses || []).forEach((exp) => {
+      const cat = exp.category || "General"
+      spentByCategory[cat] = (spentByCategory[cat] || 0) + Number(exp.amount || 0)
+    })
+
+    const enrichedBudgets = (budgets || []).map((b) => ({
+      id: b.id,
+      category: b.category,
+      allocated_amount: Number(b.allocated_amount || 0),
+      spent: spentByCategory[b.category] || 0,
+      safe_to_spend_daily: Number(b.safe_to_spend_daily || 0),
+      month: b.month,
+    }))
+
+    return NextResponse.json({ budgets: enrichedBudgets })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

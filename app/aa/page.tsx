@@ -214,7 +214,36 @@ export default function AccountAggregatorPage() {
         lastSynced: "Just now",
       }
       setActiveConsent(consentData)
-      setStep("review")
+
+      // Auto-commit mappings to localStorage
+      try {
+        localStorage.setItem("finna_active_aa_consent", JSON.stringify(consentData))
+      } catch (storageErr) {
+        console.warn("Could not save to localStorage:", storageErr)
+      }
+
+      // Auto-commit to Supabase aa_consents
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (user) {
+          await supabase.from("aa_consents").upsert({
+            user_id: user.id,
+            consent_id: approvedConsentId,
+            status: "APPROVED",
+            purpose: "Personal Finance Management",
+            url: consentUrl,
+            vpa: vpaHandle,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "consent_id" as any })
+        }
+      } catch (dbErr) {
+        console.warn("Auto-commit Supabase sync notice:", dbErr)
+      }
+
+      // Skip the transaction-review gate; go straight to connected active screen
+      setStep("active")
     } catch (err: any) {
       console.error("Session fetch error:", err)
       setConfigError(`Data session failed: ${err.message}`)
