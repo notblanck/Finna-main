@@ -111,6 +111,7 @@ export class SetuAAProvider implements AAProvider {
     }
 
     const now = new Date()
+    const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
     const payload: any = {
