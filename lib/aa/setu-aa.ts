@@ -84,6 +84,15 @@ export class SetuAAProvider implements AAProvider {
       "x-product-instance-id": this.productInstanceId,
     }
 
+    try {
+      const token = await this.getAccessToken()
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`
+      }
+    } catch (e: any) {
+      console.warn("[SetuAA] Bearer token notice:", e.message)
+    }
+
     if (this.fiuId) {
       headers["x-fiu-id"] = this.fiuId
     }
@@ -95,7 +104,11 @@ export class SetuAAProvider implements AAProvider {
     this.validateConfiguration()
     const headers = await this.getHeaders()
 
-    const vpa = params.vpa || (params.phone ? `${params.phone.replace(/^\+91/, '')}@setu` : "9876543210@setu")
+    let vpa = params.vpa || (params.phone ? `${params.phone.replace(/^\+91/, '')}@finvu` : "9876543210@finvu")
+    if (vpa.endsWith("@setu")) {
+      vpa = vpa.replace(/@setu$/, "@finvu")
+    }
+
     const now = new Date()
     const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
@@ -103,6 +116,7 @@ export class SetuAAProvider implements AAProvider {
     const payload: any = {
       vua: vpa,
       consentDuration: { unit: "MONTH", value: "12" },
+      dataLife: { unit: "DAY", value: 0 },
       dataRange: {
         from: params.dateRangeFrom || ninetyDaysAgo.toISOString(),
         to: params.dateRangeTo || now.toISOString(),
@@ -112,24 +126,13 @@ export class SetuAAProvider implements AAProvider {
 
     const requestedFiTypes = params.fiTypes?.length ? params.fiTypes : ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"]
 
-    let res = await fetch(`${this.baseUrl}/v2/consents`, {
+    const res = await fetch(`${this.baseUrl}/v2/consents`, {
       method: "POST",
       headers,
       body: JSON.stringify({ ...payload, fiTypes: requestedFiTypes }),
     })
 
-    let parsed = await this.safeParse(res)
-    const errText = JSON.stringify(parsed.data || {})
-    if (!parsed.ok && (errText.includes("Invalid FIType") || errText.includes("FIType"))) {
-      // Automatic fallback to INSURANCE_POLICIES configured on this sandbox product instance
-      res = await fetch(`${this.baseUrl}/v2/consents`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ ...payload, fiTypes: ["INSURANCE_POLICIES"] }),
-      })
-      parsed = await this.safeParse(res)
-    }
-
+    const parsed = await this.safeParse(res)
     const data = parsed.data
     if (!parsed.ok) {
       const msg = data.errorMsg || data.message || JSON.stringify(data)
