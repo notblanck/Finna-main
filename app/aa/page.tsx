@@ -79,7 +79,7 @@ export default function AccountAggregatorPage() {
   const [activeConsent, setActiveConsent] = React.useState<any>(null)
   const [syncStatusText, setSyncStatusText] = React.useState("")
 
-  const vpaHandle = `${mobileNumber}@${selectedAA.id}`
+  const vpaHandle = selectedAA.id === "setu" ? mobileNumber : `${mobileNumber}@${selectedAA.id}`
 
   // Load existing active consent from localStorage
   React.useEffect(() => {

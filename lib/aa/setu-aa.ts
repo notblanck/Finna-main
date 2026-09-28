@@ -104,27 +104,31 @@ export class SetuAAProvider implements AAProvider {
     this.validateConfiguration()
     const headers = await this.getHeaders()
 
-    let vpa = params.vpa || (params.phone ? `${params.phone.replace(/^\+91/, '')}@finvu` : "9876543210@finvu")
+    let cleanPhone = params.phone ? params.phone.replace(/^\+91/, "").replace(/\D/g, "") : ""
+    let vpa = params.vpa || cleanPhone || "9876543210"
     if (vpa.endsWith("@setu")) {
-      vpa = vpa.replace(/@setu$/, "@finvu")
+      vpa = vpa.replace(/@setu$/, "")
     }
 
     const now = new Date()
-    const oneYearFromNow = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
     const ninetyDaysAgo = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
 
     const payload: any = {
       vua: vpa,
-      consentDuration: { unit: "MONTH", value: "12" },
+      consentDuration: { unit: "MONTH", value: "1" },
       dataLife: { unit: "DAY", value: 0 },
       dataRange: {
         from: params.dateRangeFrom || ninetyDaysAgo.toISOString(),
         to: params.dateRangeTo || now.toISOString(),
       },
+      consentMode: "VIEW",
+      consentTypes: ["TRANSACTIONS", "PROFILE", "SUMMARY"],
+      fetchType: "ONETIME",
+      frequency: { unit: "MONTH", value: 1 },
       ...(params.redirectUrl ? { redirectUrl: params.redirectUrl } : {})
     }
 
-    const requestedFiTypes = params.fiTypes?.length ? params.fiTypes : ["DEPOSIT", "TERM_DEPOSIT", "RECURRING_DEPOSIT"]
+    const requestedFiTypes = params.fiTypes?.length ? params.fiTypes : ["DEPOSIT"]
 
     const res = await fetch(`${this.baseUrl}/v2/consents`, {
       method: "POST",

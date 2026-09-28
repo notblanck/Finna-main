@@ -20,7 +20,8 @@ export async function POST(request: Request) {
     }
 
     const phone = body.phone || body.phoneNumber || user?.phone || "+919876543210"
-    const vpa = body.vpa || (phone ? `${phone.replace(/^\+91/, "")}@setu` : "9876543210@setu")
+    const cleanPhone = phone.replace(/^\+91/, "").replace(/\D/g, "")
+    const vpa = body.vpa?.endsWith("@setu") ? cleanPhone : (body.vpa || cleanPhone || "9876543210")
     const purpose = body.purpose || "Personal Finance Management"
     const redirectUrl = body.redirectUrl || (process.env.NEXT_PUBLIC_APP_URL ? `${process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/aa` : undefined)
 
