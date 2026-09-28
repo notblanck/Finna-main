@@ -18,33 +18,46 @@ export async function POST(request: Request) {
     const consentId = consentNotification?.consentId || payload.consentId || payload.id
     const consentStatus = consentNotification?.consentStatus || payload.consentStatus || payload.status
 
-    const supabase = await createClient()
+    let supabase: any = null
+    try {
+      supabase = await createClient()
+    } catch (e: any) {
+      console.warn("[Next.js AA Webhook] Supabase client init notice:", e.message)
+    }
 
-    if (consentId && consentStatus) {
-      await supabase
-        .from("aa_consents")
-        .update({
-          status: consentStatus,
-          updated_at: new Date().toISOString()
-        })
-        .eq("consent_id", consentId)
+    if (supabase && consentId && consentStatus) {
+      try {
+        await supabase
+          .from("aa_consents")
+          .update({
+            status: consentStatus,
+            updated_at: new Date().toISOString()
+          })
+          .eq("consent_id", consentId)
 
-      console.log(`[Next.js AA Webhook] Updated consent ${consentId} -> ${consentStatus}`)
+        console.log(`[Next.js AA Webhook] Updated consent ${consentId} -> ${consentStatus}`)
+      } catch (dbErr: any) {
+        console.warn("[Next.js AA Webhook] DB consent update notice:", dbErr.message)
+      }
     }
 
     const sessionId = dataNotification?.sessionId || payload.sessionId
     const sessionStatus = dataNotification?.sessionStatus || payload.sessionStatus
 
-    if (sessionId && sessionStatus) {
-      await supabase
-        .from("aa_data_sessions")
-        .update({
-          status: sessionStatus,
-          updated_at: new Date().toISOString()
-        })
-        .eq("session_id", sessionId)
+    if (supabase && sessionId && sessionStatus) {
+      try {
+        await supabase
+          .from("aa_data_sessions")
+          .update({
+            status: sessionStatus,
+            updated_at: new Date().toISOString()
+          })
+          .eq("session_id", sessionId)
 
-      console.log(`[Next.js AA Webhook] Updated session ${sessionId} -> ${sessionStatus}`)
+        console.log(`[Next.js AA Webhook] Updated session ${sessionId} -> ${sessionStatus}`)
+      } catch (dbErr: any) {
+        console.warn("[Next.js AA Webhook] DB session update notice:", dbErr.message)
+      }
     }
 
     return NextResponse.json({
