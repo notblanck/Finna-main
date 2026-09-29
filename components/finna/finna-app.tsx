@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
-import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleHelp, Clock3, LockKeyhole, LogIn, ShieldCheck, Sparkles, WalletCards, Award, Activity, Landmark, Loader2, UserCheck } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleHelp, Clock3, LockKeyhole, LogIn, ShieldCheck, Sparkles, WalletCards, Award, Activity, Landmark, Loader2, UserCheck, LogOut } from "lucide-react"
+import { UserNav } from "./user-nav"
 import { PredictiveInsights } from "./predictive-insights"
 import { finnaApi, type ApiAccount, type ApiTransaction } from "@/lib/api"
 import { createClient } from "@/lib/supabase/client"
@@ -111,21 +112,8 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
             <Link href="/aa" className="hover:text-black transition">Bank Sync (AA)</Link>
           </nav>
         </div>
-        <div className="flex items-center gap-4 text-xs text-[#737373]">
-          {navUser ? (
-            <div className="flex items-center gap-2 rounded-full border border-[#e5e5e5] bg-[#fafafa] px-3.5 py-1.5 font-medium text-black">
-              <UserCheck className="size-3.5 text-black" />
-              <span>{navUser.user_metadata?.full_name?.split(" ")[0] || navUser.email?.split("@")[0] || "Account"}</span>
-            </div>
-          ) : (
-            <button
-              onClick={navigateToLogin}
-              className="flex items-center gap-1.5 rounded-full border border-[#e5e5e5] bg-white px-3.5 py-1.5 font-medium text-black hover:bg-[#f5f5f5] transition cursor-pointer"
-            >
-              <LogIn className="size-3.5 text-black" />
-              <span>Sign In</span>
-            </button>
-          )}
+        <div className="flex items-center gap-3 text-xs text-[#737373]">
+          <UserNav />
           <div className="hidden sm:flex items-center gap-2 text-xs text-[#737373]">
             <LockKeyhole className="size-3.5 text-black" /> Private and secure
           </div>
@@ -182,6 +170,15 @@ function ConsentPage() {
             >
               Review and give consent <ArrowRight className="size-4 transition group-hover:translate-x-1" />
             </Link>
+            {isAuthenticated === false && (
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-2 rounded-full border border-[#e5e5e5] bg-white px-5 py-3.5 text-sm font-medium text-black hover:bg-[#f5f5f5] hover:border-black/30 transition shadow-xs cursor-pointer"
+              >
+                <LogIn className="size-4 text-black" />
+                <span>Log In</span>
+              </Link>
+            )}
             <Link
               href="/dashboard"
               className="rounded-full border border-[#e5e5e5] px-5 py-3.5 text-sm text-[#737373] hover:text-black hover:bg-[#f5f5f5] transition"

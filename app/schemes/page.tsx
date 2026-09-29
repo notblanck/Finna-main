@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { evaluateUserSchemes, EvaluatedScheme } from "@/lib/schemes/matcher"
 import { createClient } from "@/lib/supabase/client"
+import { UserNav } from "@/components/finna/user-nav"
 
 export default function SchemesPage() {
   const [profile, setProfile] = React.useState<any>(null)
@@ -89,12 +90,15 @@ export default function SchemesPage() {
               <Link href="/health-score" className="hover:text-black transition">Health Score</Link>
             </nav>
           </div>
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#737373] hover:text-black transition"
-          >
-            <ArrowLeft className="size-3.5" /> Back to Dashboard
-          </Link>
+          <div className="flex items-center gap-3">
+            <UserNav />
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#737373] hover:text-black transition"
+            >
+              <ArrowLeft className="size-3.5" /> Back to Dashboard
+            </Link>
+          </div>
         </div>
       </header>
 

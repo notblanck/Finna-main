@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { finnaApi } from "@/lib/api"
 import { createClient } from "@/lib/supabase/client"
+import { UserNav } from "@/components/finna/user-nav"
 
 interface BankOption {
   id: string
@@ -346,12 +347,15 @@ export default function AccountAggregatorPage() {
               <span className="text-black font-semibold">Account Aggregator</span>
             </nav>
           </div>
-          <Link
-            href="/dashboard"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#737373] hover:text-black transition"
-          >
-            <ArrowLeft className="size-4" /> Back to Dashboard
-          </Link>
+          <div className="flex items-center gap-3">
+            <UserNav />
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#737373] hover:text-black transition"
+            >
+              <ArrowLeft className="size-4" /> Back to Dashboard
+            </Link>
+          </div>
         </div>
       </header>
 

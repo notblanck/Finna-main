@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { calculateHealthScore, HealthScoreResult } from "@/lib/health-score/calculator"
 import { createClient } from "@/lib/supabase/client"
+import { UserNav } from "@/components/finna/user-nav"
 
 export default function HealthScorePage() {
   const [profile, setProfile] = React.useState<any>(null)
@@ -81,6 +82,7 @@ export default function HealthScorePage() {
             </nav>
           </div>
           <div className="flex items-center gap-3">
+            <UserNav />
             <Button
               variant="outline"
               size="sm"
