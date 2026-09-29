@@ -256,14 +256,20 @@ export default function AccountAggregatorPage() {
         console.warn("Auto-commit Supabase sync notice:", dbErr)
       }
 
-      setSyncStatusText("Bank statement verified & aggregated! Redirecting to your dashboard...")
+      // Set cookie and storage so gated pages unlock
+      if (typeof window !== "undefined") {
+        document.cookie = "finna_aa_complete=true; path=/; max-age=31536000"
+        localStorage.setItem("finna_aa_complete", "true")
+      }
 
-      // Once all OTP verification is complete, redirect to main dashboard
+      setSyncStatusText("Bank statement verified & aggregated! Redirecting to data aggregation...")
+
+      // Once OTP verification is complete, redirect to mock account aggregator loading screen
       setTimeout(() => {
         if (typeof window !== "undefined") {
-          window.location.href = "/dashboard?synced=true"
+          window.location.href = "/retrieving"
         }
-      }, 1200)
+      }, 700)
     } catch (err: any) {
       console.error("Session fetch error:", err)
       setConfigError(`Data session failed: ${err.message}`)
@@ -309,7 +315,9 @@ export default function AccountAggregatorPage() {
       }
 
       if (typeof window !== "undefined") {
-        window.location.href = "/dashboard?synced=true"
+        document.cookie = "finna_aa_complete=true; path=/; max-age=31536000"
+        localStorage.setItem("finna_aa_complete", "true")
+        window.location.href = "/retrieving"
       }
     } finally {
       setIsLoading(false)
@@ -321,6 +329,19 @@ export default function AccountAggregatorPage() {
       setIsLoading(true)
       try {
         localStorage.removeItem("finna_active_aa_consent")
+        localStorage.removeItem("finna_aa_complete")
+        if (typeof window !== "undefined") {
+          document.cookie = "finna_aa_complete=false; path=/; max-age=0"
+        }
+        try {
+          const supabase = createClient()
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            await supabase.from("users").update({ aa_complete: false }).eq("id", user.id)
+          }
+        } catch {
+          // Ignore
+        }
         setActiveConsent(null)
         setStep("init")
       } finally {

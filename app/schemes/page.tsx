@@ -31,6 +31,16 @@ export default function SchemesPage() {
 
   React.useEffect(() => {
     async function loadProfile() {
+      const hasConsent = typeof window !== "undefined" && (
+        localStorage.getItem("finna_active_aa_consent") !== null ||
+        localStorage.getItem("finna_aa_complete") === "true" ||
+        document.cookie.includes("finna_aa_complete=true")
+      )
+      if (!hasConsent) {
+        window.location.href = "/aa?new=true"
+        return
+      }
+
       try {
         const supabase = createClient()
         const { data: { user } } = await supabase.auth.getUser()

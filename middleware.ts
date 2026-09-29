@@ -39,10 +39,20 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Protected paths
-  const isProtectedPath = [
+  // Other pages that require completing the Account Aggregator first
+  const isAAGatedPath = [
+    "/dashboard",
+    "/insights",
+    "/schemes",
+    "/health-score",
+  ].some((path) => pathname === path || pathname.startsWith(`${path}/`))
+
+  // Protected paths that require authentication
+  const isProtectedPath = isAAGatedPath || [
     "/onboarding",
     "/aa",
+    "/retrieving",
+    "/mock-aa",
   ].some((path) => pathname === path || pathname.startsWith(`${path}/`))
 
   if (isProtectedPath && !user) {
@@ -52,6 +62,41 @@ export async function middleware(request: NextRequest) {
     const fullTarget = request.nextUrl.search ? `${pathname}${request.nextUrl.search}` : pathname
     url.searchParams.set("redirectTo", fullTarget)
     return NextResponse.redirect(url)
+  }
+
+  // If user is authenticated and trying to access other pages, ensure AA is finished
+  if (isAAGatedPath && user) {
+    const hasAACookie = request.cookies.get("finna_aa_complete")?.value === "true"
+
+    if (!hasAACookie) {
+      const { data: profile } = await supabase
+        .from("users")
+        .select("aa_complete")
+        .eq("id", user.id)
+        .maybeSingle()
+
+      if (profile?.aa_complete) {
+        supabaseResponse.cookies.set("finna_aa_complete", "true", { path: "/", maxAge: 31536000 })
+      } else {
+        const { data: consent } = await supabase
+          .from("aa_consents")
+          .select("id")
+          .eq("user_id", user.id)
+          .in("status", ["APPROVED", "ACTIVE"])
+          .limit(1)
+          .maybeSingle()
+
+        if (consent) {
+          supabaseResponse.cookies.set("finna_aa_complete", "true", { path: "/", maxAge: 31536000 })
+        } else {
+          // Account Aggregator not yet completed: gate and route to /aa
+          const url = request.nextUrl.clone()
+          url.pathname = "/aa"
+          url.search = "?new=true"
+          return NextResponse.redirect(url)
+        }
+      }
+    }
   }
 
   if (user && pathname === "/login") {

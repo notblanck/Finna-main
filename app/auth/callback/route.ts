@@ -14,7 +14,7 @@ export async function GET(request: Request) {
       // Ensure user profile is present in public.users
       const { data: profile } = await supabase
         .from("users")
-        .select("id, onboarding_complete")
+        .select("id, onboarding_complete, aa_complete")
         .eq("id", data.user.id)
         .maybeSingle()
 
@@ -28,6 +28,7 @@ export async function GET(request: Request) {
             language: "en",
             currency: "INR",
             onboarding_complete: false,
+            aa_complete: false,
           })
         } catch (dbErr) {
           console.warn("[Auth Callback] User profile bootstrap notice:", dbErr)
@@ -41,6 +42,10 @@ export async function GET(request: Request) {
 
       if (profile && !profile.onboarding_complete) {
         return NextResponse.redirect(`${origin}/onboarding`)
+      }
+
+      if (profile && !profile.aa_complete) {
+        return NextResponse.redirect(`${origin}/aa?new=true`)
       }
 
       const forwardedHost = request.headers.get("x-forwarded-host")

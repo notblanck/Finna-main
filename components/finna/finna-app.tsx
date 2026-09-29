@@ -14,6 +14,7 @@ import { Auth1 } from "@/components/auth/auth-1"
 
 import { Auth } from "@/components/ui/auth-form-1"
 import { CashflowCalendar } from "./cashflow-calendar"
+import RetrievingPage from "@/app/retrieving/page"
 
 const fade = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -12 }, transition: { duration: .35 } }
 
@@ -262,6 +263,35 @@ function DashboardPage() {
 
   useEffect(() => {
     async function loadDashboard() {
+      // Gate dashboard until Account Aggregator is completed
+      const hasConsent = typeof window !== "undefined" && (
+        localStorage.getItem("finna_active_aa_consent") !== null ||
+        localStorage.getItem("finna_aa_complete") === "true" ||
+        document.cookie.includes("finna_aa_complete=true")
+      )
+
+      if (!hasConsent) {
+        try {
+          const supabase = createClient()
+          const { data: { user } } = await supabase.auth.getUser()
+          if (!user) {
+            window.location.href = "/login?redirectTo=/dashboard"
+            return
+          }
+          const { data: profile } = await supabase.from("users").select("aa_complete").eq("id", user.id).maybeSingle()
+          if (!profile?.aa_complete) {
+            const { data: consent } = await supabase.from("aa_consents").select("id").eq("user_id", user.id).in("status", ["APPROVED", "ACTIVE"]).limit(1).maybeSingle()
+            if (!consent) {
+              window.location.href = "/aa?new=true"
+              return
+            }
+          }
+        } catch {
+          window.location.href = "/aa?new=true"
+          return
+        }
+      }
+
       setLoading(true)
       setError(null)
       try {
@@ -549,6 +579,8 @@ export function FinnaApp() {
               }}
             />
           </div>
+        ) : path === "/retrieving" || path === "/mock-aa/retrieving" || path === "/aa/retrieving" ? (
+          <RetrievingPage />
         ) : path === "/insights" || path === "/dashboard/insights" ? (
           <InsightsPage />
         ) : path === "/dashboard" ? (
