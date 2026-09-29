@@ -199,9 +199,37 @@ export class SetuAAProvider implements AAProvider {
     this.validateConfiguration()
     const headers = await this.getHeaders()
 
+    let fromDate = options?.from
+    let toDate = options?.to
+
+    // Fetch the consent from Setu to obtain its exact granted FIDataRange
+    if (!fromDate || !toDate) {
+      try {
+        const consentRes = await fetch(`${this.baseUrl}/v2/consents/${consentId}`, {
+          method: "GET",
+          headers,
+        })
+        const consentParsed = await this.safeParse(consentRes)
+        if (consentParsed.ok && consentParsed.data) {
+          const cData = consentParsed.data
+          const cRange =
+            cData.dataRange ||
+            cData.ConsentDetail?.FIDataRange ||
+            cData.consentDetail?.fiDataRange ||
+            cData.consentDetail?.dataRange
+          if (cRange) {
+            fromDate = fromDate || cRange.from
+            toDate = toDate || cRange.to
+          }
+        }
+      } catch (err) {
+        console.warn("Could not query consent dataRange from Setu:", err)
+      }
+    }
+
     const now = new Date()
-    const fromDate = options?.from || new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
-    const toDate = options?.to || now.toISOString()
+    fromDate = fromDate || new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
+    toDate = toDate || new Date(now.getTime() - 30000).toISOString() // safe boundary
 
     const res = await fetch(`${this.baseUrl}/v2/sessions`, {
       method: "POST",

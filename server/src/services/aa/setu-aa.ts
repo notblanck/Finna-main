@@ -252,9 +252,30 @@ export class SetuAAService implements AccountAggregatorService {
     this.validateConfiguration()
     const headers = await this.getHeaders()
 
+    let fromDate = options?.from
+    let toDate = options?.to
+
+    if (!fromDate || !toDate) {
+      try {
+        const consentRes = await axios.get(`${this.baseUrl}/v2/consents/${consentId}`, { headers, timeout: 10000 })
+        const cData = consentRes.data
+        const cRange =
+          cData.dataRange ||
+          cData.ConsentDetail?.FIDataRange ||
+          cData.consentDetail?.fiDataRange ||
+          cData.consentDetail?.dataRange
+        if (cRange) {
+          fromDate = fromDate || cRange.from
+          toDate = toDate || cRange.to
+        }
+      } catch (e: any) {
+        console.warn("Could not query consent dataRange from Setu in server:", e.message)
+      }
+    }
+
     const now = new Date()
-    const fromDate = options?.from || new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
-    const toDate = options?.to || now.toISOString()
+    fromDate = fromDate || new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
+    toDate = toDate || new Date(now.getTime() - 30000).toISOString()
 
     const payload = {
       consentId,
