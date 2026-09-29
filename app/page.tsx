@@ -1,5 +1,5 @@
-import { FinnaApp } from "@/components/finna/finna-app"
+import { ConsentPage } from "@/components/finna/finna-app"
 
 export default function Home() {
-  return <FinnaApp />
+  return <ConsentPage />
 }

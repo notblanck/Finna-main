@@ -360,7 +360,7 @@ export default function AccountAggregatorPage() {
       <header className="sticky top-0 z-30 border-b border-[#e5e5e5] bg-white/90 backdrop-blur-md">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link href="/dashboard" className="flex items-center gap-2 font-bold tracking-tight text-lg">
+            <Link href="/" className="flex items-center gap-2 font-bold tracking-tight text-lg" aria-label="FINNA Home">
               <span className="size-7 rounded-lg bg-black text-white flex items-center justify-center text-xs">F</span>
               FINNA
             </Link>

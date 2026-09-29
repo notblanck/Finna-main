@@ -1,5 +1,5 @@
-import { FinnaApp } from "@/components/finna/finna-app"
+import { InsightsPage } from "@/components/finna/finna-app"
 
 export default function InsightsRoute() {
-  return <FinnaApp />
+  return <InsightsPage />
 }

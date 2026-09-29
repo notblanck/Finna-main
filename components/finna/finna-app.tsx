@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
 import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleHelp, Clock3, LockKeyhole, LogIn, ShieldCheck, Sparkles, WalletCards, Award, Activity, Landmark, Loader2, UserCheck, LogOut } from "lucide-react"
 import { UserNav } from "./user-nav"
@@ -30,6 +31,8 @@ const formatSigned = (amount: number, type: string) => {
 
 function Logo() { return <div className="flex items-center gap-2.5 font-semibold tracking-tight"><span className="flex size-8 items-center justify-center rounded-xl bg-black text-white"><Sparkles className="size-4" /></span><span className="text-lg text-black">finna</span></div> }
 function Shell({ children, back = false, onBack }: { children: React.ReactNode; back?: boolean; onBack?: () => void }) {
+  const pathname = usePathname()
+  const router = useRouter()
   const [navSchemesCount, setNavSchemesCount] = useState<number | null>(null)
   const [navHealthScore, setNavHealthScore] = useState<number | null>(null)
   const [navUser, setNavUser] = useState<any>(null)
@@ -69,16 +72,12 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
     } else if (typeof window !== "undefined" && window.history.length > 1) {
       window.history.back()
     } else {
-      window.history.pushState({}, "", "/dashboard")
-      window.dispatchEvent(new PopStateEvent("popstate"))
+      router.push("/dashboard")
     }
   }
 
   const navigateToLogin = () => {
-    if (typeof window !== "undefined") {
-      window.history.pushState({}, "", "/login")
-      window.dispatchEvent(new PopStateEvent("popstate"))
-    }
+    router.push("/login")
   }
 
   return (
@@ -94,25 +93,46 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
               <ArrowLeft className="size-4" />
             </button>
           )}
-          <Link href="/dashboard" className="cursor-pointer">
+          <Link href="/" className="cursor-pointer" aria-label="FINNA Home">
             <Logo />
           </Link>
-          <nav className="hidden md:flex items-center gap-5 text-xs font-medium text-[#737373]">
-            <Link href="/dashboard" className="hover:text-black transition">Dashboard</Link>
-            <Link href="/insights" className="hover:text-black transition">Cashflow Calendar</Link>
-            <Link href="/schemes" className="hover:text-black transition flex items-center gap-1.5">
+          <nav className="hidden md:flex items-center gap-5 text-xs font-medium">
+            <Link
+              href="/dashboard"
+              className={`transition ${pathname === "/dashboard" ? "text-black font-semibold" : "text-[#737373] hover:text-black"}`}
+            >
+              Dashboard
+            </Link>
+            <Link
+              href="/insights"
+              className={`transition ${pathname === "/insights" ? "text-black font-semibold" : "text-[#737373] hover:text-black"}`}
+            >
+              Cashflow Calendar
+            </Link>
+            <Link
+              href="/schemes"
+              className={`transition flex items-center gap-1.5 ${pathname === "/schemes" ? "text-black font-semibold" : "text-[#737373] hover:text-black"}`}
+            >
               <span>Schemes & Welfare</span>
               <span className="rounded-full bg-black px-1.5 py-0.5 text-[10px] text-white font-bold">
                 {navSchemesCount ?? 3}
               </span>
             </Link>
-            <Link href="/health-score" className="hover:text-black transition flex items-center gap-1.5">
+            <Link
+              href="/health-score"
+              className={`transition flex items-center gap-1.5 ${pathname === "/health-score" ? "text-black font-semibold" : "text-[#737373] hover:text-black"}`}
+            >
               <span>Health Score</span>
               <span className="rounded-full bg-[#f5f5f5] border border-[#e5e5e5] px-1.5 py-0.5 text-[10px] text-black font-semibold">
                 {navHealthScore ?? 72}
               </span>
             </Link>
-            <Link href="/aa" className="hover:text-black transition">Bank Sync (AA)</Link>
+            <Link
+              href="/aa"
+              className={`transition ${pathname === "/aa" ? "text-black font-semibold" : "text-[#737373] hover:text-black"}`}
+            >
+              Bank Sync (AA)
+            </Link>
           </nav>
         </div>
         <div className="flex items-center gap-3 text-xs text-[#737373]">
@@ -135,7 +155,7 @@ function Pill({ children }: { children: React.ReactNode }) {
   )
 }
 
-function ConsentPage() {
+export function ConsentPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -253,7 +273,7 @@ function ConsentPage() {
   )
 }
 
-function DashboardPage() {
+export function DashboardPage() {
   const [accounts, setAccounts] = useState<ApiAccount[]>([])
   const [transactions, setTransactions] = useState<ApiTransaction[]>([])
   const [healthScore, setHealthScore] = useState<number>(72)
@@ -541,12 +561,12 @@ function DashboardPage() {
                 Your income is consistent, and your spending is stable. You could comfortably set aside ₹3,200 this month.
               </p>
             </div>
-            <button
-              onClick={goToInsights}
+            <Link
+              href="/insights"
               className="mt-7 inline-flex items-center gap-2 text-sm font-medium text-white hover:text-[#e5e5e5] transition group cursor-pointer self-start underline underline-offset-4"
             >
               Explore cashflow calendar <ArrowRight className="size-4 transition group-hover:translate-x-1" />
-            </button>
+            </Link>
           </section>
         </div>
 
@@ -557,10 +577,10 @@ function DashboardPage() {
   )
 }
 
-function InsightsPage() {
+export function InsightsPage() {
+  const router = useRouter()
   const returnToDashboard = () => {
-    window.history.pushState({}, "", "/dashboard")
-    window.dispatchEvent(new PopStateEvent("popstate"))
+    router.push("/dashboard")
   }
 
   return (
@@ -573,21 +593,14 @@ function InsightsPage() {
 }
 
 export function FinnaApp() {
-  const [path, setPath] = useState(typeof window !== "undefined" ? window.location.pathname : "/consent")
-
-  useEffect(() => {
-    const onPop = () => setPath(window.location.pathname)
-    window.addEventListener("popstate", onPop)
-    return () => window.removeEventListener("popstate", onPop)
-  }, [])
-
+  const pathname = usePathname()
   const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null
   const targetRedirect = searchParams?.get("redirectTo") || searchParams?.get("next") || "/dashboard"
 
   return (
     <AnimatePresence mode="wait">
-      <motion.div key={path}>
-        {path === "/login" ? (
+      <motion.div key={pathname}>
+        {pathname === "/login" ? (
           <div className="min-h-screen w-full flex flex-col justify-center items-center p-4 bg-background selection:bg-primary/20">
             <Auth
               redirectTo={targetRedirect}
@@ -598,11 +611,11 @@ export function FinnaApp() {
               }}
             />
           </div>
-        ) : path === "/retrieving" || path === "/mock-aa/retrieving" || path === "/aa/retrieving" ? (
+        ) : pathname === "/retrieving" || pathname === "/mock-aa/retrieving" || pathname === "/aa/retrieving" ? (
           <RetrievingPage />
-        ) : path === "/insights" || path === "/dashboard/insights" ? (
+        ) : pathname === "/insights" || pathname === "/dashboard/insights" ? (
           <InsightsPage />
-        ) : path === "/dashboard" ? (
+        ) : pathname === "/dashboard" ? (
           <DashboardPage />
         ) : (
           <ConsentPage />
