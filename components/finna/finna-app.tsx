@@ -14,6 +14,8 @@ import { Auth1 } from "@/components/auth/auth-1"
 
 import { Auth } from "@/components/ui/auth-form-1"
 import { CashflowCalendar } from "./cashflow-calendar"
+import { DataSourcesSection } from "./data-sources-section"
+import { calculateFinnaFinancialState } from "@/lib/finance/engine"
 import RetrievingPage from "@/app/retrieving/page"
 
 const fade = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -12 }, transition: { duration: .35 } }
@@ -308,14 +310,22 @@ function DashboardPage() {
         if (txnsRes.status === "fulfilled") {
           setTransactions(txnsRes.value)
         }
-        if (hsRes.status === "fulfilled" && hsRes.value) {
-          const score = hsRes.value.score
-          setHealthScore(score)
-          if (score >= 80) setHealthBand("Strong")
-          else if (score >= 65) setHealthBand("Good")
-          else if (score >= 50) setHealthBand("Stable")
+
+        // Compute authoritative dynamic health score & metrics from calculation engine
+        const calc = calculateFinnaFinancialState()
+        const score = calc.healthScore.totalScore
+        setHealthScore(score)
+        setHealthBand(calc.healthScore.band)
+
+        if (hsRes.status === "fulfilled" && hsRes.value && !localStorage.getItem("finna_arun_override") && !localStorage.getItem("finna_gig_override")) {
+          const apiScore = hsRes.value.score
+          setHealthScore(apiScore)
+          if (apiScore >= 80) setHealthBand("Strong")
+          else if (apiScore >= 65) setHealthBand("Good")
+          else if (apiScore >= 50) setHealthBand("Stable")
           else setHealthBand("Needs Attention")
         }
+
         if (profRes.status === "fulfilled" && (profRes.value as any)?.user) {
           const u = (profRes.value as any).user
           if (u.full_name) {
@@ -333,7 +343,13 @@ function DashboardPage() {
         setLoading(false)
       }
     }
+
     loadDashboard()
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("finna_data_updated", loadDashboard)
+      return () => window.removeEventListener("finna_data_updated", loadDashboard)
+    }
   }, [])
 
   const goToInsights = () => {
@@ -533,6 +549,9 @@ function DashboardPage() {
             </button>
           </section>
         </div>
+
+        {/* Section 11: Data Sources & Financial Understanding with Section 14 Simulator */}
+        <DataSourcesSection onDataChanged={loadDashboard} />
       </motion.div>
     </Shell>
   )

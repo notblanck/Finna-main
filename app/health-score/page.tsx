@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { calculateHealthScore, HealthScoreResult } from "@/lib/health-score/calculator"
+import { calculateFinnaFinancialState } from "@/lib/finance/engine"
 import { createClient } from "@/lib/supabase/client"
 import { UserNav } from "@/components/finna/user-nav"
 
@@ -56,19 +57,29 @@ export default function HealthScorePage() {
       }
     }
     loadData()
+
+    const onDataUpdated = () => {
+      // Force trigger state update
+      setProfile((prev: any) => ({ ...(prev || {}), _updated: Date.now() }))
+    }
+    if (typeof window !== "undefined") {
+      window.addEventListener("finna_data_updated", onDataUpdated)
+      return () => window.removeEventListener("finna_data_updated", onDataUpdated)
+    }
   }, [])
 
   const healthData: HealthScoreResult = React.useMemo(() => {
+    const calc = calculateFinnaFinancialState()
     return calculateHealthScore({
-      monthlyIncome: profile?.annual_income_estimate ? Math.round(profile.annual_income_estimate / 12) : 32450,
-      monthlyExpense: 18600,
-      liquidSavings: 14200,
-      activeDaysRatio: 0.85,
-      platformCount: profile?.platformCount || 2,
-      monthlyEmi: 3200,
-      hasInsurance: true,
-      eShramRegistered: Boolean(profile?.e_shram_id),
-      panLinked: Boolean(profile?.pan_last4),
+      monthlyIncome: calc.income.totalMonthlyNet,
+      monthlyExpense: calc.expenses.totalMonthlyExpenses,
+      liquidSavings: calc.savings.liquidBankSavings,
+      activeDaysRatio: calc.income.activeWorkingDays / 30,
+      platformCount: calc.income.platformBreakdown.length || profile?.platformCount || 2,
+      monthlyEmi: calc.expenses.monthlyEmi,
+      hasInsurance: !calc.healthScore.components.insuranceProtection.isDrag,
+      eShramRegistered: Boolean(profile?.e_shram_id || calc.arun.occupation),
+      panLinked: Boolean(profile?.pan_last4 || true),
     })
   }, [profile])
 

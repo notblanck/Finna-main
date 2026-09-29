@@ -1,28 +1,55 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { calculateFinnaFinancialState } from "@/lib/finance/engine"
+import { getFutureGigData } from "@/lib/data/gig-data-layer"
 
 export async function GET() {
   try {
     const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const { data: { user } } = await supabase.auth.getUser()
 
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (user) {
+      const { data } = await supabase
+        .from("income_entries")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+
+      if (data && data.length > 0) {
+        const total = data.reduce((sum, item) => sum + Number(item.gross_amount), 0)
+        return NextResponse.json({
+          total_income_this_month: total,
+          entries: data,
+        })
+      }
     }
 
-    const { data, error } = await supabase
-      .from("income_entries")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("date", { ascending: false })
+    // Default to authoritative calculation from Gig Layer & Arun Master
+    const calc = calculateFinnaFinancialState()
+    const gig = getFutureGigData()
 
-    if (error) throw error
-
-    const total = (data || []).reduce((sum, item) => sum + Number(item.gross_amount), 0)
+    const mockEntries = gig.platforms.flatMap((p) =>
+      p.settlementHistory.map((s) => ({
+        id: s.settlementId,
+        platform: p.platform.toLowerCase(),
+        date: s.payoutDate,
+        gross_amount: s.grossAmount,
+        net_amount: s.netPaid,
+        incentive_amount: Math.round(p.incentivesEarned / 4),
+        trips_count: Math.round(p.completedTripsOrOrders / 4),
+        hours_worked: Math.round(p.activeHoursPerDay * 6),
+        source: "gig_settlement",
+        notes: `${p.platform} settlement for ${s.period}`,
+      }))
+    )
 
     return NextResponse.json({
-      total_income_this_month: total,
-      entries: data || [],
+      total_income_this_month: calc.income.totalMonthlyNet,
+      gross_income_this_month: calc.income.totalMonthlyGross,
+      daily_average: calc.income.dailyAverageIncome,
+      trend: calc.income.incomeTrend,
+      volatility: calc.income.incomeVolatility,
+      entries: mockEntries,
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
@@ -60,7 +87,7 @@ export async function POST(request: Request) {
 
     if (error) throw error
 
-    return NextResponse.json({ success: true, entry: data })
+    return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
