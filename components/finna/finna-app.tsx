@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
 import { ArrowLeft, ArrowRight, Check, ChevronDown, CircleHelp, Clock3, LockKeyhole, LogIn, ShieldCheck, Sparkles, WalletCards, Award, Activity, Landmark, Loader2, UserCheck, LogOut } from "lucide-react"
@@ -263,94 +263,94 @@ function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    async function loadDashboard() {
-      // Gate dashboard until Account Aggregator is completed
-      const hasConsent = typeof window !== "undefined" && (
-        localStorage.getItem("finna_active_aa_consent") !== null ||
-        localStorage.getItem("finna_aa_complete") === "true" ||
-        document.cookie.includes("finna_aa_complete=true")
-      )
+  const loadDashboard = useCallback(async () => {
+    // Gate dashboard until Account Aggregator is completed
+    const hasConsent = typeof window !== "undefined" && (
+      localStorage.getItem("finna_active_aa_consent") !== null ||
+      localStorage.getItem("finna_aa_complete") === "true" ||
+      document.cookie.includes("finna_aa_complete=true")
+    )
 
-      if (!hasConsent) {
-        try {
-          const supabase = createClient()
-          const { data: { user } } = await supabase.auth.getUser()
-          if (!user) {
-            window.location.href = "/login?redirectTo=/dashboard"
-            return
-          }
-          const { data: profile } = await supabase.from("users").select("aa_complete").eq("id", user.id).maybeSingle()
-          if (!profile?.aa_complete) {
-            const { data: consent } = await supabase.from("aa_consents").select("id").eq("user_id", user.id).in("status", ["APPROVED", "ACTIVE"]).limit(1).maybeSingle()
-            if (!consent) {
-              window.location.href = "/aa?new=true"
-              return
-            }
-          }
-        } catch {
-          window.location.href = "/aa?new=true"
+    if (!hasConsent) {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) {
+          window.location.href = "/login?redirectTo=/dashboard"
           return
         }
-      }
-
-      setLoading(true)
-      setError(null)
-      try {
-        const [accsRes, txnsRes, hsRes, profRes] = await Promise.allSettled([
-          finnaApi.getAccounts(),
-          finnaApi.getTransactions(),
-          finnaApi.getHealthScore(),
-          finnaApi.getProfile(),
-        ])
-
-        if (accsRes.status === "fulfilled") {
-          setAccounts(accsRes.value)
-        }
-        if (txnsRes.status === "fulfilled") {
-          setTransactions(txnsRes.value)
-        }
-
-        // Compute authoritative dynamic health score & metrics from calculation engine
-        const calc = calculateFinnaFinancialState()
-        const score = calc.healthScore.totalScore
-        setHealthScore(score)
-        setHealthBand(calc.healthScore.band)
-
-        if (hsRes.status === "fulfilled" && hsRes.value && !localStorage.getItem("finna_arun_override") && !localStorage.getItem("finna_gig_override")) {
-          const apiScore = hsRes.value.score
-          setHealthScore(apiScore)
-          if (apiScore >= 80) setHealthBand("Strong")
-          else if (apiScore >= 65) setHealthBand("Good")
-          else if (apiScore >= 50) setHealthBand("Stable")
-          else setHealthBand("Needs Attention")
-        }
-
-        if (profRes.status === "fulfilled" && (profRes.value as any)?.user) {
-          const u = (profRes.value as any).user
-          if (u.full_name) {
-            setUserName(u.full_name.split(" ")[0])
-          }
-          const { eligible } = evaluateUserSchemes(u)
-          if (eligible) {
-            setSchemesCount(eligible.length)
+        const { data: profile } = await supabase.from("users").select("aa_complete").eq("id", user.id).maybeSingle()
+        if (!profile?.aa_complete) {
+          const { data: consent } = await supabase.from("aa_consents").select("id").eq("user_id", user.id).in("status", ["APPROVED", "ACTIVE"]).limit(1).maybeSingle()
+          if (!consent) {
+            window.location.href = "/aa?new=true"
+            return
           }
         }
-      } catch (err: any) {
-        console.error("Dashboard data load error:", err)
-        setError(err.message)
-      } finally {
-        setLoading(false)
+      } catch {
+        window.location.href = "/aa?new=true"
+        return
       }
     }
 
+    setLoading(true)
+    setError(null)
+    try {
+      const [accsRes, txnsRes, hsRes, profRes] = await Promise.allSettled([
+        finnaApi.getAccounts(),
+        finnaApi.getTransactions(),
+        finnaApi.getHealthScore(),
+        finnaApi.getProfile(),
+      ])
+
+      if (accsRes.status === "fulfilled") {
+        setAccounts(accsRes.value)
+      }
+      if (txnsRes.status === "fulfilled") {
+        setTransactions(txnsRes.value)
+      }
+
+      // Compute authoritative dynamic health score & metrics from calculation engine
+      const calc = calculateFinnaFinancialState()
+      const score = calc.healthScore.totalScore
+      setHealthScore(score)
+      setHealthBand(calc.healthScore.band)
+
+      if (hsRes.status === "fulfilled" && hsRes.value && !localStorage.getItem("finna_arun_override") && !localStorage.getItem("finna_gig_override")) {
+        const apiScore = hsRes.value.score
+        setHealthScore(apiScore)
+        if (apiScore >= 80) setHealthBand("Strong")
+        else if (apiScore >= 65) setHealthBand("Good")
+        else if (apiScore >= 50) setHealthBand("Stable")
+        else setHealthBand("Needs Attention")
+      }
+
+      if (profRes.status === "fulfilled" && (profRes.value as any)?.user) {
+        const u = (profRes.value as any).user
+        if (u.full_name) {
+          setUserName(u.full_name.split(" ")[0])
+        }
+        const { eligible } = evaluateUserSchemes(u)
+        if (eligible) {
+          setSchemesCount(eligible.length)
+        }
+      }
+    } catch (err: any) {
+      console.error("Dashboard data load error:", err)
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
     loadDashboard()
 
     if (typeof window !== "undefined") {
       window.addEventListener("finna_data_updated", loadDashboard)
       return () => window.removeEventListener("finna_data_updated", loadDashboard)
     }
-  }, [])
+  }, [loadDashboard])
 
   const goToInsights = () => {
     window.history.pushState({}, "", "/insights")
