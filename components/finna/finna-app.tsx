@@ -18,6 +18,7 @@ import { CashflowCalendar } from "./cashflow-calendar"
 import { DataSourcesSection } from "./data-sources-section"
 import { calculateFinnaFinancialState } from "@/lib/finance/engine"
 import RetrievingPage from "@/app/retrieving/page"
+import { FinnaLogoMark } from "./logo"
 
 const fade = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -12 }, transition: { duration: .35 } }
 
@@ -29,7 +30,14 @@ const formatSigned = (amount: number, type: string) => {
   return `${isCredit ? "+" : "−"}${formatINR(amount)}`
 }
 
-function Logo() { return <div className="flex items-center gap-2.5 font-semibold tracking-tight"><span className="flex size-8 items-center justify-center rounded-xl bg-black text-white"><Sparkles className="size-4" /></span><span className="text-lg text-black">finna</span></div> }
+function Logo() {
+  return (
+    <div className="flex items-center gap-2 font-bold tracking-tight group">
+      <FinnaLogoMark className="size-7" />
+      <span className="text-xl font-bold tracking-tight text-black">finna</span>
+    </div>
+  )
+}
 function Shell({ children, back = false, onBack }: { children: React.ReactNode; back?: boolean; onBack?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()

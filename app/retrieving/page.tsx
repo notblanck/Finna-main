@@ -4,6 +4,7 @@ import * as React from "react"
 import { motion } from "framer-motion"
 import { Check, Clock3, Sparkles, ShieldCheck, ArrowRight, Landmark } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { FinnaLogo } from "@/components/finna/logo"
 
 const STEPS = [
   { title: "Verifying consent & identity", subtitle: "RBI-regulated consent token confirmed" },
@@ -68,12 +69,7 @@ export default function RetrievingPage() {
     <div className="min-h-screen bg-white text-black flex flex-col justify-between selection:bg-primary/20">
       {/* Header */}
       <header className="mx-auto flex w-full max-w-6xl items-center justify-between px-5 py-6 md:px-8 border-b border-[#e5e5e5]">
-        <div className="flex items-center gap-2.5 font-semibold tracking-tight">
-          <span className="flex size-8 items-center justify-center rounded-xl bg-black text-white">
-            <Sparkles className="size-4" />
-          </span>
-          <span className="text-lg text-black">finna</span>
-        </div>
+        <FinnaLogo size="md" href="/" />
         <div className="flex items-center gap-2 text-xs font-mono text-[#737373] bg-[#f5f5f5] px-3 py-1.5 rounded-full border border-[#e5e5e5]">
           <Landmark className="size-3.5 text-black" />
           <span>RBI Account Aggregator</span>

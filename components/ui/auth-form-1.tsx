@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { finnaApi } from "@/lib/api";
 import { createClient } from "@/lib/supabase/client";
+import { FinnaLogo } from "@/components/finna/logo";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hszljstojfizjehqkhzk.supabase.co";
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhzemxqc3RvamZpemplaHFraHprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzEyMjAsImV4cCI6MjEwMzk0NzIyMH0.XUcYD0M5zLV0LeGNBtP8YbREipS6sY0AEQg0a10sPDA";
@@ -446,7 +447,8 @@ function AuthSignIn({ onForgotPassword, onSignUp, onSuccess, redirectTo = "/dash
       transition={{ duration: 0.3, ease: "easeInOut" }}
       className="p-8"
     >
-      <div className="mb-8 text-center">
+      <div className="mb-8 text-center flex flex-col items-center">
+        <FinnaLogo href="/" className="justify-center mb-4" />
         <h1 className="text-3xl font-semibold text-foreground">Welcome back</h1>
         <p className="mt-2 text-sm text-muted-foreground">Sign in to your account</p>
       </div>
@@ -669,7 +671,8 @@ function AuthSignUp({ onSignIn, onSuccess, redirectTo = "/dashboard" }: AuthSign
       transition={{ duration: 0.3, ease: "easeInOut" }}
       className="p-8"
     >
-      <div className="mb-8 text-center">
+      <div className="mb-8 text-center flex flex-col items-center">
+        <FinnaLogo href="/" className="justify-center mb-4" />
         <h1 className="text-3xl font-semibold text-foreground">Create account</h1>
         <p className="mt-2 text-sm text-muted-foreground">Get started with your account</p>
       </div>

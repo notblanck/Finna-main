@@ -24,6 +24,7 @@ import { calculateHealthScore, HealthScoreResult } from "@/lib/health-score/calc
 import { calculateFinnaFinancialState } from "@/lib/finance/engine"
 import { createClient } from "@/lib/supabase/client"
 import { UserNav } from "@/components/finna/user-nav"
+import { FinnaLogo } from "@/components/finna/logo"
 
 export default function HealthScorePage() {
   const [profile, setProfile] = React.useState<any>(null)
@@ -85,16 +86,34 @@ export default function HealthScorePage() {
 
   const { totalScore, band, components, drags, recommendations, trend } = healthData
 
+  const [animatedScore, setAnimatedScore] = React.useState(0)
+
+  React.useEffect(() => {
+    let startTimestamp: number | null = null
+    const duration = 1200
+    const target = totalScore
+
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1)
+      const easeProgress = 1 - Math.pow(1 - progress, 3)
+      setAnimatedScore(Math.round(easeProgress * target))
+      if (progress < 1) {
+        requestAnimationFrame(step)
+      }
+    }
+
+    const frameId = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(frameId)
+  }, [totalScore])
+
   return (
     <div className="min-h-screen bg-[#fafafa] text-black">
       {/* Top Navbar */}
       <header className="sticky top-0 z-30 border-b border-[#e5e5e5] bg-white/90 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-center gap-2 font-bold tracking-tight text-lg" aria-label="FINNA Home">
-              <span className="size-7 rounded-lg bg-black text-white flex items-center justify-center text-xs">F</span>
-              FINNA
-            </Link>
+            <FinnaLogo size="sm" href="/" />
             <nav className="hidden md:flex items-center gap-4 text-xs font-medium text-[#737373]">
               <Link href="/dashboard" className="hover:text-black transition">Dashboard</Link>
               <Link href="/insights" className="hover:text-black transition">Cashflow Calendar</Link>
@@ -148,7 +167,7 @@ export default function HealthScorePage() {
           <div className="lg:col-span-5 flex flex-col items-center justify-center p-6 rounded-2xl bg-[#f5f5f5] border border-[#e5e5e5]">
             <div className="relative size-44 flex items-center justify-center">
               {/* SVG Ring Gauge */}
-              <svg className="size-full -rotate-90" viewBox="0 0 120 120">
+              <svg className="size-full -rotate-90 drop-shadow-xs" viewBox="0 0 120 120">
                 <circle
                   cx="60"
                   cy="60"
@@ -157,24 +176,38 @@ export default function HealthScorePage() {
                   strokeWidth="10"
                   fill="transparent"
                 />
-                <circle
+                <motion.circle
                   cx="60"
                   cy="60"
                   r="50"
-                  className="stroke-black transition-all duration-1000 ease-out"
+                  className="stroke-black"
                   strokeWidth="10"
                   strokeDasharray="314.159"
-                  strokeDashoffset={314.159 - (314.159 * totalScore) / 100}
+                  initial={{ strokeDashoffset: 314.159 }}
+                  animate={{ strokeDashoffset: 314.159 - (314.159 * totalScore) / 100 }}
+                  transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1], delay: 0.15 }}
                   strokeLinecap="round"
                   fill="transparent"
                 />
               </svg>
               <div className="absolute flex flex-col items-center justify-center text-center">
-                <span className="text-4xl font-black tracking-tighter text-black">{totalScore}</span>
+                <motion.span
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.4, delay: 0.1 }}
+                  className="text-4xl font-black tracking-tighter text-black tabular-nums"
+                >
+                  {animatedScore}
+                </motion.span>
                 <span className="text-[11px] font-mono text-[#737373] uppercase tracking-wider">out of 100</span>
-                <span className="mt-1 text-xs font-bold text-black bg-white px-2.5 py-0.5 rounded-full border border-[#e5e5e5] shadow-2xs">
+                <motion.span
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.4, delay: 0.8 }}
+                  className="mt-1 text-xs font-bold text-black bg-white px-2.5 py-0.5 rounded-full border border-[#e5e5e5] shadow-2xs"
+                >
                   {band}
-                </span>
+                </motion.span>
               </div>
             </div>
 
@@ -226,10 +259,10 @@ export default function HealthScorePage() {
           </div>
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {components.map((comp) => {
+            {components.map((comp, idx) => {
               const pct = (comp.score / comp.maxScore) * 100
               return (
-                <div key={comp.key} className="rounded-2xl border border-[#e5e5e5] bg-white p-5 space-y-3 shadow-xs">
+                <div key={comp.key} className="rounded-2xl border border-[#e5e5e5] bg-white p-5 space-y-3 shadow-xs hover:border-black/40 transition-colors">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-black">{comp.name}</span>
                     <span className="text-xs font-mono font-bold text-black">
@@ -238,9 +271,11 @@ export default function HealthScorePage() {
                   </div>
 
                   <div className="w-full h-2 rounded-full bg-[#f5f5f5] border border-[#e5e5e5] overflow-hidden">
-                    <div
-                      className="h-full bg-black rounded-full transition-all duration-500"
-                      style={{ width: `${pct}%` }}
+                    <motion.div
+                      className="h-full bg-black rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${pct}%` }}
+                      transition={{ duration: 0.9, delay: 0.25 + idx * 0.08, ease: [0.16, 1, 0.3, 1] }}
                     />
                   </div>
 

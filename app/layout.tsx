@@ -27,6 +27,7 @@ export const metadata: Metadata = {
 }
 
 import { CopilotPanel } from "@/components/finna/copilot-panel"
+import { ScrollProgressBar } from "@/components/finna/scroll-progress"
 
 export default function RootLayout({
   children,
@@ -39,6 +40,7 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${instrumentSans.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable} font-sans antialiased`}
       >
+        <ScrollProgressBar />
         {children}
         <CopilotPanel />
         <Analytics />

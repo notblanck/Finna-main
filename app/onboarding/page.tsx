@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { createClient } from "@/lib/supabase/client"
+import { FinnaLogo } from "@/components/finna/logo"
 
 const GIG_PLATFORMS = [
   { id: "swiggy", name: "Swiggy", category: "Delivery" },
@@ -127,12 +128,7 @@ export default function OnboardingPage() {
     <div className="min-h-screen bg-[#fafafa] text-black flex flex-col justify-between p-4 sm:p-8">
       {/* Header */}
       <header className="max-w-2xl mx-auto w-full pt-4 pb-6 flex items-center justify-between border-b border-[#e5e5e5]">
-        <div className="flex items-center gap-2">
-          <div className="size-8 rounded-xl bg-black flex items-center justify-center text-white font-bold text-sm">
-            F
-          </div>
-          <span className="font-bold tracking-tight text-lg">FINNA</span>
-        </div>
+        <FinnaLogo size="sm" href="/" />
         <div className="flex items-center gap-2 text-xs font-mono text-[#737373]">
           <span>Step {step} of 3</span>
           <div className="w-16 h-1.5 rounded-full bg-[#e5e5e5] overflow-hidden">
