@@ -71,9 +71,10 @@ type ForgotPasswordFormValues = z.infer<typeof forgotPasswordSchema>;
 interface AuthProps extends React.ComponentProps<"div"> {
   redirectTo?: string;
   onSuccess?: (user: any, token: string) => void;
+  initialError?: string | null;
 }
 
-function Auth({ className, redirectTo = "/dashboard", onSuccess, ...props }: AuthProps) {
+function Auth({ className, redirectTo = "/dashboard", onSuccess, initialError, ...props }: AuthProps) {
   const [state, setState] = React.useState<AuthState>({ view: AuthView.SIGN_IN });
 
   const setView = React.useCallback((view: AuthView) => {
@@ -111,6 +112,7 @@ function Auth({ className, redirectTo = "/dashboard", onSuccess, ...props }: Aut
               <AuthSignIn
                 key="sign-in"
                 redirectTo={redirectTo}
+                initialError={initialError}
                 onForgotPassword={() => setView(AuthView.FORGOT_PASSWORD)}
                 onSignUp={() => setView(AuthView.SIGN_UP)}
                 onSuccess={handleAuthSuccess}
@@ -248,12 +250,13 @@ interface AuthSignInProps {
   onSignUp: () => void;
   onSuccess?: (user: any, token: string) => void;
   redirectTo?: string;
+  initialError?: string | null;
 }
 
-function AuthSignIn({ onForgotPassword, onSignUp, onSuccess, redirectTo = "/dashboard" }: AuthSignInProps) {
+function AuthSignIn({ onForgotPassword, onSignUp, onSuccess, redirectTo = "/dashboard", initialError }: AuthSignInProps) {
   const [formState, setFormState] = React.useState<FormState>({
     isLoading: false,
-    error: null,
+    error: initialError || null,
     showPassword: false,
   });
 
@@ -342,20 +345,26 @@ function AuthSignIn({ onForgotPassword, onSignUp, onSuccess, redirectTo = "/dash
       const demoEmail = "rider.demo@finna.ai";
       const demoPass = "FinnaDemo2026!";
 
-      const { data: authData } = await supabase.auth.signInWithPassword({
+      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
         email: demoEmail,
         password: demoPass,
       });
 
-      if (authData?.user && authData?.session) {
+      if (!signInError && authData?.user && authData?.session) {
         const user = {
           id: authData.user.id,
           email: authData.user.email,
           full_name: authData.user.user_metadata?.full_name || "Aakash Verma (Gig Partner)",
           preferred_language: "en",
         };
+        if (typeof document !== "undefined") {
+          document.cookie = "finna_aa_complete=true; path=/; max-age=31536000";
+          localStorage.setItem("finna_aa_complete", "true");
+        }
         if (onSuccess) {
           onSuccess(user, authData.session.access_token);
+        } else if (typeof window !== "undefined") {
+          window.location.href = redirectTo;
         }
         return;
       }
@@ -379,8 +388,14 @@ function AuthSignIn({ onForgotPassword, onSignUp, onSuccess, redirectTo = "/dash
           full_name: "Aakash Verma (Gig Partner)",
           preferred_language: "en",
         };
+        if (typeof document !== "undefined") {
+          document.cookie = "finna_aa_complete=true; path=/; max-age=31536000";
+          localStorage.setItem("finna_aa_complete", "true");
+        }
         if (onSuccess) {
           onSuccess(user, signUpData.session.access_token);
+        } else if (typeof window !== "undefined") {
+          window.location.href = redirectTo;
         }
         return;
       }
@@ -392,8 +407,14 @@ function AuthSignIn({ onForgotPassword, onSignUp, onSuccess, redirectTo = "/dash
         full_name: "Aakash Verma (Gig Partner)",
         preferred_language: "en",
       };
+      if (typeof document !== "undefined") {
+        document.cookie = "finna_aa_complete=true; path=/; max-age=31536000";
+        localStorage.setItem("finna_aa_complete", "true");
+      }
       if (onSuccess) {
         onSuccess(demoUser, "finna-demo-token-12345");
+      } else if (typeof window !== "undefined") {
+        window.location.href = redirectTo;
       }
     } catch {
       const demoUser = {
@@ -402,8 +423,14 @@ function AuthSignIn({ onForgotPassword, onSignUp, onSuccess, redirectTo = "/dash
         full_name: "Aakash Verma (Gig Partner)",
         preferred_language: "en",
       };
+      if (typeof document !== "undefined") {
+        document.cookie = "finna_aa_complete=true; path=/; max-age=31536000";
+        localStorage.setItem("finna_aa_complete", "true");
+      }
       if (onSuccess) {
         onSuccess(demoUser, "finna-demo-token-12345");
+      } else if (typeof window !== "undefined") {
+        window.location.href = redirectTo;
       }
     } finally {
       setFormState((prev) => ({ ...prev, isLoading: false }));
