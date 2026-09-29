@@ -94,7 +94,7 @@ export default function OnboardingPage() {
             avg_monthly_earning: Math.round(Number(monthlyEarning) / selectedPlatforms.length),
             active: true,
           }))
-          await supabase.from("user_platforms").upsert(platformRows)
+          await supabase.from("user_platforms").upsert(platformRows, { onConflict: "user_id, platform" })
         }
       }
 

@@ -116,26 +116,52 @@ export interface CashflowDay {
 class FinnaApiClient {
   private token: string = "demo-token"
 
+  constructor() {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("finna_token")
+      if (stored) {
+        this.token = stored
+      }
+    }
+  }
+
   setAuthToken(token: string) {
     this.token = token
+    if (typeof window !== "undefined") {
+      localStorage.setItem("finna_token", token)
+    }
+  }
+
+  getAuthToken(): string {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("finna_token")
+      if (stored) return stored
+    }
+    return this.token
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const url = `${API_BASE}${path}`
+    const token = this.getAuthToken()
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(options.headers as Record<string, string> || {})
     }
 
-    if (this.token) {
-      headers["Authorization"] = `Bearer ${this.token}`
+    if (token && token !== "demo-token") {
+      headers["Authorization"] = `Bearer ${token}`
     }
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 6000)
+    const timeoutId = setTimeout(() => controller.abort(), 8000)
 
     try {
-      const res = await fetch(url, { ...options, headers, signal: options.signal || controller.signal })
+      const res = await fetch(url, {
+        ...options,
+        headers,
+        credentials: "include",
+        signal: options.signal || controller.signal
+      })
       if (!res.ok) {
         const errorText = await res.text()
         let parsedMessage = errorText
@@ -330,9 +356,14 @@ class FinnaApiClient {
 
   // Setu AA Integration — calls Next.js AA routes (executed in bom1 Mumbai region)
   async createAAConsent(data: { phone?: string; vpa?: string; purpose?: string; fiTypes?: string[]; redirectUrl?: string }) {
+    const token = this.getAuthToken()
+    const headers: Record<string, string> = { "Content-Type": "application/json" }
+    if (token && token !== "demo-token") headers["Authorization"] = `Bearer ${token}`
+
     const res = await fetch("/api/aa/consent", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
+      credentials: "include",
       body: JSON.stringify(data)
     })
     const json = await res.json()
@@ -346,7 +377,14 @@ class FinnaApiClient {
   }
 
   async getAAConsentStatus(consentId: string) {
-    const res = await fetch(`/api/aa/consent/${consentId}/status`)
+    const token = this.getAuthToken()
+    const headers: Record<string, string> = {}
+    if (token && token !== "demo-token") headers["Authorization"] = `Bearer ${token}`
+
+    const res = await fetch(`/api/aa/consent/${consentId}/status`, {
+      headers,
+      credentials: "include",
+    })
     const json = await res.json()
     if (!res.ok) {
       throw new Error(json.message || json.error || "Failed to get consent status")
@@ -355,9 +393,14 @@ class FinnaApiClient {
   }
 
   async createAASession(consentId: string) {
+    const token = this.getAuthToken()
+    const headers: Record<string, string> = { "Content-Type": "application/json" }
+    if (token && token !== "demo-token") headers["Authorization"] = `Bearer ${token}`
+
     const res = await fetch("/api/aa/session", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
+      credentials: "include",
       body: JSON.stringify({ consentId })
     })
     const json = await res.json()
@@ -368,7 +411,14 @@ class FinnaApiClient {
   }
 
   async fetchAASessionData(sessionId: string) {
-    const res = await fetch(`/api/aa/session/${sessionId}`)
+    const token = this.getAuthToken()
+    const headers: Record<string, string> = {}
+    if (token && token !== "demo-token") headers["Authorization"] = `Bearer ${token}`
+
+    const res = await fetch(`/api/aa/session/${sessionId}`, {
+      headers,
+      credentials: "include",
+    })
     const json = await res.json()
     if (!res.ok) {
       throw new Error(json.message || json.error || "Failed to fetch session data")

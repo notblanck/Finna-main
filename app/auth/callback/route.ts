@@ -4,32 +4,42 @@ import { createClient } from "@/lib/supabase/server"
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get("code")
-  const next = searchParams.get("next") ?? "/dashboard"
+  const next = searchParams.get("next") ?? searchParams.get("redirectTo") ?? "/dashboard"
 
   if (code) {
     const supabase = await createClient()
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error && data.user) {
-      // Bootstrap user profile if not present
+      // Ensure user profile is present in public.users
       const { data: profile } = await supabase
         .from("users")
-        .select("onboarding_complete")
+        .select("id, onboarding_complete")
         .eq("id", data.user.id)
-        .single()
+        .maybeSingle()
 
       if (!profile) {
-        await supabase.from("users").insert({
-          id: data.user.id,
-          email: data.user.email,
-          full_name: data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "Gig Partner",
-          preferred_language: "en",
-          onboarding_complete: false,
-        })
-        return NextResponse.redirect(`${origin}/onboarding`)
+        try {
+          await supabase.from("users").upsert({
+            id: data.user.id,
+            email: data.user.email,
+            full_name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || data.user.email?.split("@")[0] || "Gig Partner",
+            preferred_language: "en",
+            language: "en",
+            currency: "INR",
+            onboarding_complete: false,
+          })
+        } catch (dbErr) {
+          console.warn("[Auth Callback] User profile bootstrap notice:", dbErr)
+        }
       }
 
-      if (!profile.onboarding_complete) {
+      // If user came specifically from "Review and give consent", forward directly to /aa
+      if (next && (next.startsWith("/aa") || next.includes("/aa"))) {
+        return NextResponse.redirect(`${origin}${next}`)
+      }
+
+      if (profile && !profile.onboarding_complete) {
         return NextResponse.redirect(`${origin}/onboarding`)
       }
 

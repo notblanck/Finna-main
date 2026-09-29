@@ -26,7 +26,8 @@ import {
   RefreshCw,
   Trash2,
   SlidersHorizontal,
-  X
+  X,
+  Plus
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -254,8 +255,14 @@ export default function AccountAggregatorPage() {
         console.warn("Auto-commit Supabase sync notice:", dbErr)
       }
 
-      // Skip the transaction-review gate; go straight to connected active screen
-      setStep("active")
+      setSyncStatusText("Bank statement verified & aggregated! Redirecting to your dashboard...")
+
+      // Once all OTP verification is complete, redirect to main dashboard
+      setTimeout(() => {
+        if (typeof window !== "undefined") {
+          window.location.href = "/dashboard?synced=true"
+        }
+      }, 1200)
     } catch (err: any) {
       console.error("Session fetch error:", err)
       setConfigError(`Data session failed: ${err.message}`)
@@ -300,7 +307,9 @@ export default function AccountAggregatorPage() {
         console.warn("Local storage fallback for guest mode:", dbErr)
       }
 
-      setStep("active")
+      if (typeof window !== "undefined") {
+        window.location.href = "/dashboard?synced=true"
+      }
     } finally {
       setIsLoading(false)
     }

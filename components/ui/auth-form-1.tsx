@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { finnaApi } from "@/lib/api";
+import { createClient } from "@/lib/supabase/client";
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://hszljstojfizjehqkhzk.supabase.co";
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhzemxqc3RvamZpemplaHFraHprIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgzNzEyMjAsImV4cCI6MjEwMzk0NzIyMH0.XUcYD0M5zLV0LeGNBtP8YbREipS6sY0AEQg0a10sPDA";
@@ -109,6 +110,7 @@ function Auth({ className, redirectTo = "/dashboard", onSuccess, ...props }: Aut
             {state.view === AuthView.SIGN_IN && (
               <AuthSignIn
                 key="sign-in"
+                redirectTo={redirectTo}
                 onForgotPassword={() => setView(AuthView.FORGOT_PASSWORD)}
                 onSignUp={() => setView(AuthView.SIGN_UP)}
                 onSuccess={handleAuthSuccess}
@@ -117,6 +119,7 @@ function Auth({ className, redirectTo = "/dashboard", onSuccess, ...props }: Aut
             {state.view === AuthView.SIGN_UP && (
               <AuthSignUp
                 key="sign-up"
+                redirectTo={redirectTo}
                 onSignIn={() => setView(AuthView.SIGN_IN)}
                 onSuccess={handleAuthSuccess}
               />
@@ -244,9 +247,10 @@ interface AuthSignInProps {
   onForgotPassword: () => void;
   onSignUp: () => void;
   onSuccess?: (user: any, token: string) => void;
+  redirectTo?: string;
 }
 
-function AuthSignIn({ onForgotPassword, onSignUp, onSuccess }: AuthSignInProps) {
+function AuthSignIn({ onForgotPassword, onSignUp, onSuccess, redirectTo = "/dashboard" }: AuthSignInProps) {
   const [formState, setFormState] = React.useState<FormState>({
     isLoading: false,
     error: null,
@@ -261,34 +265,29 @@ function AuthSignIn({ onForgotPassword, onSignUp, onSuccess }: AuthSignInProps) 
   const onSubmit = async (data: SignInFormValues) => {
     setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
-      // Direct Supabase Auth SignIn with Password
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/token?grant_type=password`, {
-        method: "POST",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: data.email.trim().toLowerCase(),
-          password: data.password,
-        }),
+      const supabase = createClient();
+      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: data.email.trim().toLowerCase(),
+        password: data.password,
       });
 
-      const result = await res.json();
+      if (signInError) {
+        throw signInError;
+      }
 
-      if (!res.ok) {
-        throw new Error(result.error_description || result.msg || "Invalid email or password");
+      if (!authData.user || !authData.session) {
+        throw new Error("Unable to establish session. Please check your credentials.");
       }
 
       const user = {
-        id: result.user?.id || `user-${Date.now()}`,
-        email: result.user?.email || data.email,
-        full_name: result.user?.user_metadata?.full_name || data.email.split("@")[0],
-        preferred_language: "en",
+        id: authData.user.id,
+        email: authData.user.email || data.email,
+        full_name: authData.user.user_metadata?.full_name || data.email.split("@")[0],
+        preferred_language: authData.user.user_metadata?.preferred_language || "en",
       };
 
       if (onSuccess) {
-        onSuccess(user, result.access_token || `token-${Date.now()}`);
+        onSuccess(user, authData.session.access_token);
       }
     } catch (err: any) {
       setFormState((prev) => ({
@@ -300,22 +299,114 @@ function AuthSignIn({ onForgotPassword, onSignUp, onSuccess }: AuthSignInProps) 
     }
   };
 
-  const handleGoogleSignIn = () => {
-    if (typeof window !== "undefined") {
-      const redirectUrl = `${window.location.origin}/auth/callback`;
-      window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(redirectUrl)}`;
+  const handleGoogleSignIn = async () => {
+    setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
+    try {
+      const supabase = createClient();
+      const redirectUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`;
+      const { data: oauthData, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
+        },
+      });
+
+      if (oauthError) {
+        throw oauthError;
+      }
+
+      if (oauthData?.url) {
+        window.location.href = oauthData.url;
+      }
+    } catch (err: any) {
+      let msg = err.message || "Failed to start Google sign in";
+      if (msg.toLowerCase().includes("unsupported provider") || msg.toLowerCase().includes("provider is not enabled")) {
+        msg = "Google Sign-in is not enabled in your Supabase project. Please enable Google under Authentication > Providers in your Supabase Dashboard.";
+      }
+      setFormState((prev) => ({
+        ...prev,
+        isLoading: false,
+        error: msg,
+      }));
     }
   };
 
-  const handleDemoSignIn = () => {
-    const demoUser = {
-      id: "demo-rider-001",
-      email: "rider.demo@finna.ai",
-      full_name: "Aakash Verma (Gig Partner)",
-      preferred_language: "en",
-    };
-    if (onSuccess) {
-      onSuccess(demoUser, "finna-demo-token-12345");
+  const handleDemoSignIn = async () => {
+    setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
+    try {
+      const supabase = createClient();
+      const demoEmail = "rider.demo@finna.ai";
+      const demoPass = "FinnaDemo2026!";
+
+      const { data: authData } = await supabase.auth.signInWithPassword({
+        email: demoEmail,
+        password: demoPass,
+      });
+
+      if (authData?.user && authData?.session) {
+        const user = {
+          id: authData.user.id,
+          email: authData.user.email,
+          full_name: authData.user.user_metadata?.full_name || "Aakash Verma (Gig Partner)",
+          preferred_language: "en",
+        };
+        if (onSuccess) {
+          onSuccess(user, authData.session.access_token);
+        }
+        return;
+      }
+
+      // If demo user does not exist yet, attempt signup
+      const { data: signUpData } = await supabase.auth.signUp({
+        email: demoEmail,
+        password: demoPass,
+        options: {
+          data: {
+            full_name: "Aakash Verma (Gig Partner)",
+            preferred_language: "en"
+          }
+        }
+      });
+
+      if (signUpData?.user && signUpData?.session) {
+        const user = {
+          id: signUpData.user.id,
+          email: signUpData.user.email,
+          full_name: "Aakash Verma (Gig Partner)",
+          preferred_language: "en",
+        };
+        if (onSuccess) {
+          onSuccess(user, signUpData.session.access_token);
+        }
+        return;
+      }
+
+      // Local demo fallback
+      const demoUser = {
+        id: "demo-rider-001",
+        email: demoEmail,
+        full_name: "Aakash Verma (Gig Partner)",
+        preferred_language: "en",
+      };
+      if (onSuccess) {
+        onSuccess(demoUser, "finna-demo-token-12345");
+      }
+    } catch {
+      const demoUser = {
+        id: "demo-rider-001",
+        email: "rider.demo@finna.ai",
+        full_name: "Aakash Verma (Gig Partner)",
+        preferred_language: "en",
+      };
+      if (onSuccess) {
+        onSuccess(demoUser, "finna-demo-token-12345");
+      }
+    } finally {
+      setFormState((prev) => ({ ...prev, isLoading: false }));
     }
   };
 
@@ -436,9 +527,10 @@ function AuthSignIn({ onForgotPassword, onSignUp, onSuccess }: AuthSignInProps) 
 interface AuthSignUpProps {
   onSignIn: () => void;
   onSuccess?: (user: any, token: string) => void;
+  redirectTo?: string;
 }
 
-function AuthSignUp({ onSignIn, onSuccess }: AuthSignUpProps) {
+function AuthSignUp({ onSignIn, onSuccess, redirectTo = "/dashboard" }: AuthSignUpProps) {
   const [formState, setFormState] = React.useState<FormState>({
     isLoading: false,
     error: null,
@@ -455,38 +547,45 @@ function AuthSignUp({ onSignIn, onSuccess }: AuthSignUpProps) {
   const onSubmit = async (data: SignUpFormValues) => {
     setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
-      // Call Supabase Auth SignUp
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/signup`, {
-        method: "POST",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: data.email.trim().toLowerCase(),
-          password: data.password,
+      const supabase = createClient();
+      const { data: authData, error: signUpErr } = await supabase.auth.signUp({
+        email: data.email.trim().toLowerCase(),
+        password: data.password,
+        options: {
           data: {
             full_name: data.name,
             preferred_language: "en",
           },
-        }),
+        },
       });
 
-      const result = await res.json();
+      if (signUpErr) {
+        throw signUpErr;
+      }
 
-      if (!res.ok) {
-        throw new Error(result.error_description || result.msg || result.message || "Failed to create account");
+      if (!authData.user) {
+        throw new Error("Could not create account. Please try again.");
       }
 
       const user = {
-        id: result.user?.id || `user-${Date.now()}`,
-        email: result.user?.email || data.email,
+        id: authData.user.id,
+        email: authData.user.email || data.email,
         full_name: data.name,
         preferred_language: "en",
       };
 
-      if (onSuccess) {
-        onSuccess(user, result.access_token || `token-${Date.now()}`);
+      if (authData.session) {
+        if (onSuccess) {
+          onSuccess(user, authData.session.access_token);
+        }
+      } else {
+        // If email confirmation is required by Supabase project
+        setFormState((prev) => ({
+          ...prev,
+          isLoading: false,
+          error: null,
+          successMessage: "Account created! Please check your email to confirm your account, then sign in.",
+        }));
       }
     } catch (err: any) {
       setFormState((prev) => ({
@@ -495,6 +594,42 @@ function AuthSignUp({ onSignIn, onSuccess }: AuthSignUpProps) {
       }));
     } finally {
       setFormState((prev) => ({ ...prev, isLoading: false }));
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
+    try {
+      const supabase = createClient();
+      const redirectUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`;
+      const { data: oauthData, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: "offline",
+            prompt: "consent",
+          },
+        },
+      });
+
+      if (oauthError) {
+        throw oauthError;
+      }
+
+      if (oauthData?.url) {
+        window.location.href = oauthData.url;
+      }
+    } catch (err: any) {
+      let msg = err.message || "Failed to start Google sign in";
+      if (msg.toLowerCase().includes("unsupported provider") || msg.toLowerCase().includes("provider is not enabled")) {
+        msg = "Google Sign-in is not enabled in your Supabase project. Please enable Google under Authentication > Providers in your Supabase Dashboard.";
+      }
+      setFormState((prev) => ({
+        ...prev,
+        isLoading: false,
+        error: msg,
+      }));
     }
   };
 
@@ -607,7 +742,7 @@ function AuthSignUp({ onSignIn, onSuccess }: AuthSignUpProps) {
       </AuthForm>
 
       <AuthSeparator />
-      <AuthSocialButtons isLoading={formState.isLoading} />
+      <AuthSocialButtons isLoading={formState.isLoading} onGoogleClick={handleGoogleSignIn} />
 
       <p className="mt-8 text-center text-sm text-muted-foreground">
         Have an account?{" "}
@@ -648,20 +783,16 @@ function AuthForgotPassword({ onSignIn, onSuccess }: AuthForgotPasswordProps) {
   const onSubmit = async (data: ForgotPasswordFormValues) => {
     setFormState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
-      const res = await fetch(`${SUPABASE_URL}/auth/v1/recover`, {
-        method: "POST",
-        headers: {
-          apikey: SUPABASE_ANON_KEY,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: data.email.trim().toLowerCase(),
-        }),
-      });
+      const supabase = createClient();
+      const { error: resetErr } = await supabase.auth.resetPasswordForEmail(
+        data.email.trim().toLowerCase(),
+        {
+          redirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback?next=/dashboard` : undefined,
+        }
+      );
 
-      if (!res.ok) {
-        const result = await res.json();
-        throw new Error(result.error_description || result.msg || "Failed to send reset link");
+      if (resetErr) {
+        throw resetErr;
       }
 
       onSuccess();

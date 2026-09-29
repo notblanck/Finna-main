@@ -34,13 +34,24 @@ export async function middleware(request: NextRequest) {
   // Protected paths
   const isProtectedPath = [
     "/onboarding",
+    "/aa",
   ].some((path) => pathname === path || pathname.startsWith(`${path}/`))
 
   if (isProtectedPath && !user) {
     // If not authenticated, redirect to /login
     const url = request.nextUrl.clone()
     url.pathname = "/login"
-    url.searchParams.set("redirectTo", pathname)
+    const fullTarget = request.nextUrl.search ? `${pathname}${request.nextUrl.search}` : pathname
+    url.searchParams.set("redirectTo", fullTarget)
+    return NextResponse.redirect(url)
+  }
+
+  if (user && pathname === "/login") {
+    const target = request.nextUrl.searchParams.get("redirectTo") || request.nextUrl.searchParams.get("next") || "/dashboard"
+    const url = request.nextUrl.clone()
+    url.pathname = target.split("?")[0]
+    const targetSearch = target.includes("?") ? target.split("?")[1] : ""
+    url.search = targetSearch
     return NextResponse.redirect(url)
   }
 

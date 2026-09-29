@@ -145,6 +145,23 @@ function Pill({ children }: { children: React.ReactNode }) {
 }
 
 function ConsentPage() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const supabase = createClient()
+        const { data: { user } } = await supabase.auth.getUser()
+        setIsAuthenticated(!!user)
+      } catch {
+        setIsAuthenticated(false)
+      }
+    }
+    checkAuth()
+  }, [])
+
+  const consentHref = isAuthenticated === true ? "/aa?new=true" : "/login?redirectTo=/aa?new=true"
+
   return (
     <Shell>
       <motion.div {...fade} className="mx-auto grid max-w-5xl gap-10 pt-12 lg:grid-cols-[1.1fr_.9fr] lg:pt-20">
@@ -160,7 +177,7 @@ function ConsentPage() {
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
-              href="/aa?new=true"
+              href={consentHref}
               className="group inline-flex items-center gap-3 rounded-full bg-black px-5 py-3.5 text-sm font-medium text-white transition hover:bg-[#262626]"
             >
               Review and give consent <ArrowRight className="size-4 transition group-hover:translate-x-1" />
@@ -518,18 +535,19 @@ export function FinnaApp() {
     return () => window.removeEventListener("popstate", onPop)
   }, [])
 
+  const searchParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null
+  const targetRedirect = searchParams?.get("redirectTo") || searchParams?.get("next") || "/dashboard"
+
   return (
     <AnimatePresence mode="wait">
       <motion.div key={path}>
         {path === "/login" ? (
           <div className="min-h-screen w-full flex flex-col justify-center items-center p-4 bg-background selection:bg-primary/20">
             <Auth
-              redirectTo="/dashboard"
+              redirectTo={targetRedirect}
               onSuccess={() => {
-                setPath("/dashboard")
                 if (typeof window !== "undefined") {
-                  window.history.pushState({}, "", "/dashboard")
-                  window.dispatchEvent(new PopStateEvent("popstate"))
+                  window.location.href = targetRedirect
                 }
               }}
             />

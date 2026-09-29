@@ -22,6 +22,27 @@ export async function GET(
       console.warn("[Next.js AA Session Data] Supabase auth notice:", authErr.message)
     }
 
+    if (!user && supabase) {
+      const authHeader = request.headers.get("authorization")
+      const token = authHeader?.replace(/^Bearer\s+/i, "")
+      if (token && token !== "demo-token") {
+        const { data: userData } = await supabase.auth.getUser(token)
+        if (userData?.user) {
+          user = userData.user
+        }
+      }
+      if (!user) {
+        const { data: sessRow } = await supabase
+          .from("aa_data_sessions")
+          .select("user_id")
+          .eq("session_id", sessionId)
+          .maybeSingle()
+        if (sessRow?.user_id) {
+          user = { id: sessRow.user_id }
+        }
+      }
+    }
+
     let fiData: any
     if (sessionId.startsWith("session-mock-") || sessionId.startsWith("AA-SETU-DEMO-") || process.env.USE_MOCK_AA === "true") {
       fiData = await mockAA.fetchFIData(sessionId)
@@ -127,8 +148,11 @@ export async function GET(
                       user_id: user.id,
                       platform: txn.mappedPlatform,
                       date: txn.date,
+                      earned_at: txn.date,
+                      amount: txn.amount,
                       gross_amount: txn.amount,
                       source: "aa",
+                      note: `Reconciled via Setu AA from ${acc.bank} (${acc.accountNumber})`,
                       notes: `Reconciled via Setu AA from ${acc.bank} (${acc.accountNumber})`
                     })
                     .select()
@@ -137,7 +161,7 @@ export async function GET(
                   if (incData) syncedIncomeEntries.push(incData)
                 }
 
-                // 4. Map Fuel / EMI to `public.expenses`
+                // 4. Map Fuel / EMI to `public.expenses` and `public.expense_entries`
                 if (txn.type === "DEBIT" && (txn.categoryGuess === "Fuel" || txn.categoryGuess === "Vehicle EMI")) {
                   const { data: expData } = await supabase
                     .from("expenses")
@@ -148,10 +172,27 @@ export async function GET(
                       category: txn.categoryGuess,
                       source: "aa",
                       is_business_expense: true,
-                      notes: `Imported via Setu AA (${txn.narration})`
+                      notes: `Imported via Setu AA (${txn.narration || txn.description || ""})`
                     })
                     .select()
                     .single()
+
+                  try {
+                    await supabase
+                      .from("expense_entries")
+                      .insert({
+                        user_id: user.id,
+                        spent_at: txn.date,
+                        date: txn.date,
+                        amount: txn.amount,
+                        category: txn.categoryGuess,
+                        source: "aa",
+                        note: `Imported via Setu AA (${txn.narration || txn.description || ""})`,
+                        notes: `Imported via Setu AA (${txn.narration || txn.description || ""})`
+                      })
+                  } catch {
+                    // Ignore duplicate sync
+                  }
 
                   if (expData) syncedExpenses.push(expData)
                 }
