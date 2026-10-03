@@ -20,6 +20,8 @@ import { calculateFinnaFinancialState } from "@/lib/finance/engine"
 import RetrievingPage from "@/app/retrieving/page"
 import { FinnaLogoMark } from "./logo"
 
+import { MobileTopBar, MobileBottomTabs } from "./mobile-nav"
+
 const fade = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -12 }, transition: { duration: .35 } }
 
 const formatINR = (val: number) =>
@@ -84,13 +86,13 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
     }
   }
 
-  const navigateToLogin = () => {
-    router.push("/login")
-  }
-
   return (
-    <div className="min-h-screen bg-white text-black">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-5 py-6 md:px-8 border-b border-[#e5e5e5]">
+    <div className="min-h-screen bg-white text-black flex flex-col justify-between">
+      {/* Mobile Top Bar (< 768px) */}
+      <MobileTopBar schemesCount={navSchemesCount} />
+
+      {/* Desktop Header (>= 768px) */}
+      <header className="hidden md:flex mx-auto w-full max-w-6xl items-center justify-between px-5 py-6 md:px-8 border-b border-[#e5e5e5]">
         <div className="flex items-center gap-6">
           {back && (
             <button
@@ -104,7 +106,7 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
           <Link href="/" className="cursor-pointer" aria-label="FINNA Home">
             <Logo />
           </Link>
-          <nav className="hidden md:flex items-center gap-5 text-xs font-medium">
+          <nav className="flex items-center gap-5 text-xs font-medium">
             <Link
               href="/dashboard"
               className={`transition ${pathname === "/dashboard" ? "text-black font-semibold" : "text-[#737373] hover:text-black"}`}
@@ -150,7 +152,42 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-5 pb-16 md:px-8">{children}</main>
+
+      {/* Main Content with bottom padding for mobile tab bar */}
+      <main className="mx-auto w-full max-w-6xl px-5 pb-24 md:pb-16 flex-1">{children}</main>
+
+      {/* Global Footer */}
+      <footer className="mt-auto border-t border-[#e5e5e5] bg-white py-8 px-5 md:px-8 mb-16 md:mb-0">
+        <div className="mx-auto max-w-6xl flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#737373]">
+          <div className="flex items-center gap-2">
+            <FinnaLogoMark className="size-5" />
+            <span className="font-bold text-black">FINNA</span>
+            <span>· Financial Intelligence for India</span>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-4">
+            <Link href="/terms" className="hover:text-black transition">Terms of Service</Link>
+            <Link href="/privacy" className="hover:text-black transition">Privacy Policy</Link>
+            <Link href="/cookies" className="hover:text-black transition">Cookie Policy</Link>
+            <button
+              type="button"
+              onClick={() => {
+                if (typeof window !== "undefined" && (window as any).openFinnaCookieSettings) {
+                  (window as any).openFinnaCookieSettings()
+                } else if (typeof window !== "undefined") {
+                  window.dispatchEvent(new CustomEvent("finna:open-cookie-settings"))
+                }
+              }}
+              className="hover:text-black underline transition cursor-pointer"
+            >
+              Cookie settings
+            </button>
+            <Link href="/aa" className="hover:text-black transition">RBI Account Aggregator</Link>
+          </div>
+        </div>
+      </footer>
+
+      {/* Mobile Fixed 5-Tab Bar (< 768px) */}
+      <MobileBottomTabs schemesCount={navSchemesCount} />
     </div>
   )
 }
@@ -197,22 +234,13 @@ export function ConsentPage() {
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
               href={consentHref}
-              className="group inline-flex items-center gap-3 rounded-full bg-black px-5 py-3.5 text-sm font-medium text-white transition hover:bg-[#262626]"
+              className="group inline-flex items-center gap-3 rounded-full bg-black px-5 py-3.5 text-sm font-medium text-white transition hover:bg-[#262626] shadow-xs cursor-pointer"
             >
               Review and give consent <ArrowRight className="size-4 transition group-hover:translate-x-1" />
             </Link>
-            {isAuthenticated === false && (
-              <Link
-                href="/login"
-                className="inline-flex items-center gap-2 rounded-full border border-[#e5e5e5] bg-white px-5 py-3.5 text-sm font-medium text-black hover:bg-[#f5f5f5] hover:border-black/30 transition shadow-xs cursor-pointer"
-              >
-                <LogIn className="size-4 text-black" />
-                <span>Log In</span>
-              </Link>
-            )}
             <Link
               href="/dashboard"
-              className="rounded-full border border-[#e5e5e5] px-5 py-3.5 text-sm text-[#737373] hover:text-black hover:bg-[#f5f5f5] transition"
+              className="rounded-full border border-[#e5e5e5] px-5 py-3.5 text-sm text-[#737373] hover:text-black hover:bg-[#f5f5f5] transition cursor-pointer"
             >
               Not now
             </Link>

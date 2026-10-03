@@ -1,7 +1,6 @@
 import React from "react"
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
 const instrumentSans = Instrument_Sans({ 
@@ -26,8 +25,15 @@ export const metadata: Metadata = {
   generator: 'v0.app',
 }
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+}
+
 import { CopilotPanel } from "@/components/finna/copilot-panel"
 import { ScrollProgressBar } from "@/components/finna/scroll-progress"
+import { CookieBanner, ConsentAnalytics } from "@/components/finna/cookie-banner"
 
 export default function RootLayout({
   children,
@@ -43,7 +49,8 @@ export default function RootLayout({
         <ScrollProgressBar />
         {children}
         <CopilotPanel />
-        <Analytics />
+        <CookieBanner />
+        <ConsentAnalytics />
       </body>
     </html>
   )

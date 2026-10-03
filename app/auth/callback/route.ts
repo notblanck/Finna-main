@@ -76,22 +76,38 @@ export async function GET(request: Request) {
 
   const forwardedHost = request.headers.get("x-forwarded-host")
   const isLocalEnv = process.env.NODE_ENV === "development"
-  const targetUrl = isLocalEnv
-    ? `${origin}${finalDestination}`
-    : forwardedHost
-    ? `https://${forwardedHost}${finalDestination}`
-    : `${origin}${finalDestination}`
+  
+  let targetOrigin = origin
+  if (!isLocalEnv) {
+    if (forwardedHost === "finnastudio.me" || forwardedHost === "www.finnastudio.me") {
+      targetOrigin = "https://www.finnastudio.me"
+    } else if (forwardedHost) {
+      targetOrigin = `https://${forwardedHost}`
+    } else if (origin.includes("finnastudio.me")) {
+      targetOrigin = "https://www.finnastudio.me"
+    }
+  }
 
+  const targetUrl = `${targetOrigin}${finalDestination}`
   const redirectResponse = NextResponse.redirect(targetUrl)
 
-  // Explicitly copy all cookies from cookieStore to ensure auth & session tokens persist
+  // Explicitly copy all cookies with correct path, SameSite, and Secure attributes
   cookieStore.getAll().forEach((c) => {
-    redirectResponse.cookies.set(c.name, c.value)
+    redirectResponse.cookies.set(c.name, c.value, {
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    })
   })
 
   // If user has completed Account Aggregator, ensure finna_aa_complete cookie is set
   if (profile?.aa_complete) {
-    redirectResponse.cookies.set("finna_aa_complete", "true", { path: "/", maxAge: 31536000 })
+    redirectResponse.cookies.set("finna_aa_complete", "true", {
+      path: "/",
+      maxAge: 31536000,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production"
+    })
   }
 
   return redirectResponse

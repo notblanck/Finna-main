@@ -25,6 +25,7 @@ import { calculateFinnaFinancialState } from "@/lib/finance/engine"
 import { createClient } from "@/lib/supabase/client"
 import { UserNav } from "@/components/finna/user-nav"
 import { FinnaLogo } from "@/components/finna/logo"
+import { MobileTopBar, MobileBottomTabs } from "@/components/finna/mobile-nav"
 
 export default function HealthScorePage() {
   const [profile, setProfile] = React.useState<any>(null)
@@ -109,8 +110,11 @@ export default function HealthScorePage() {
 
   return (
     <div className="min-h-screen bg-[#fafafa] text-black">
-      {/* Top Navbar */}
-      <header className="sticky top-0 z-30 border-b border-[#e5e5e5] bg-white/90 backdrop-blur-md">
+      {/* Mobile Top Bar */}
+      <MobileTopBar />
+
+      {/* Desktop Top Navbar */}
+      <header className="hidden md:block sticky top-0 z-30 border-b border-[#e5e5e5] bg-white/90 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <FinnaLogo size="sm" href="/" />
@@ -141,7 +145,7 @@ export default function HealthScorePage() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-10">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12 pb-24 md:pb-16 space-y-10">
         {/* Hero Score Gauge Section */}
         <section className="rounded-3xl border border-[#e5e5e5] bg-white p-6 sm:p-10 shadow-sm grid lg:grid-cols-12 gap-8 items-center">
           <div className="lg:col-span-7 space-y-4">
@@ -348,6 +352,29 @@ export default function HealthScorePage() {
         </section>
       </main>
 
+      {/* Global Footer */}
+      <footer className="border-t border-[#e5e5e5] bg-white py-10 px-4 sm:px-6 mb-16 md:mb-0">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#737373]">
+          <div>
+            © {new Date().getFullYear()} FINNA Studio. Designed for Indian financial health.
+          </div>
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+            <Link href="/terms" className="hover:text-black transition">Terms of Service</Link>
+            <Link href="/privacy" className="hover:text-black transition">Privacy Policy</Link>
+            <Link href="/cookies" className="hover:text-black transition">Cookie Policy</Link>
+            <button
+              type="button"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent("finna-open-cookie-settings"))
+              }}
+              className="hover:text-black transition underline cursor-pointer"
+            >
+              Cookie settings
+            </button>
+          </div>
+        </div>
+      </footer>
+
       {/* Verified Certificate Modal */}
       {showCertificate && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -404,6 +431,9 @@ export default function HealthScorePage() {
           </div>
         </div>
       )}
+
+      {/* Mobile Bottom Tabs */}
+      <MobileBottomTabs activeTab="health-score" />
     </div>
   )
 }

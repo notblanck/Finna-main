@@ -37,6 +37,29 @@ export async function middleware(request: NextRequest) {
     }
   )
 
+  // Helper to copy all supabase cookies to any redirect response
+  function redirectWithCookies(targetUrl: URL | string, status = 307) {
+    const res = NextResponse.redirect(targetUrl, status)
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      res.cookies.set(cookie.name, cookie.value, {
+        path: "/",
+        sameSite: "lax",
+        secure: process.env.NODE_ENV === "production",
+        ...cookie,
+      })
+    })
+    return res
+  }
+
+  // Canonical host handling: ensure www.finnastudio.me consistency
+  const host = request.headers.get("host") || ""
+  if (host === "finnastudio.me") {
+    const canonicalUrl = new URL(request.url)
+    canonicalUrl.host = "www.finnastudio.me"
+    canonicalUrl.protocol = "https:"
+    return redirectWithCookies(canonicalUrl, 301)
+  }
+
   const { data: { user } } = await supabase.auth.getUser()
 
   // Other pages that require completing the Account Aggregator first
@@ -61,7 +84,7 @@ export async function middleware(request: NextRequest) {
     url.pathname = "/login"
     const fullTarget = request.nextUrl.search ? `${pathname}${request.nextUrl.search}` : pathname
     url.searchParams.set("redirectTo", fullTarget)
-    return NextResponse.redirect(url)
+    return redirectWithCookies(url)
   }
 
   // If user is authenticated and trying to access other pages, ensure AA is finished
@@ -76,7 +99,12 @@ export async function middleware(request: NextRequest) {
         .maybeSingle()
 
       if (profile?.aa_complete) {
-        supabaseResponse.cookies.set("finna_aa_complete", "true", { path: "/", maxAge: 31536000 })
+        supabaseResponse.cookies.set("finna_aa_complete", "true", {
+          path: "/",
+          maxAge: 31536000,
+          sameSite: "lax",
+          secure: process.env.NODE_ENV === "production"
+        })
       } else {
         const { data: consent } = await supabase
           .from("aa_consents")
@@ -87,13 +115,18 @@ export async function middleware(request: NextRequest) {
           .maybeSingle()
 
         if (consent) {
-          supabaseResponse.cookies.set("finna_aa_complete", "true", { path: "/", maxAge: 31536000 })
+          supabaseResponse.cookies.set("finna_aa_complete", "true", {
+            path: "/",
+            maxAge: 31536000,
+            sameSite: "lax",
+            secure: process.env.NODE_ENV === "production"
+          })
         } else {
           // Account Aggregator not yet completed: gate and route to /aa
           const url = request.nextUrl.clone()
           url.pathname = "/aa"
           url.search = "?new=true"
-          return NextResponse.redirect(url)
+          return redirectWithCookies(url)
         }
       }
     }
@@ -105,7 +138,7 @@ export async function middleware(request: NextRequest) {
     url.pathname = target.split("?")[0]
     const targetSearch = target.includes("?") ? target.split("?")[1] : ""
     url.search = targetSearch
-    return NextResponse.redirect(url)
+    return redirectWithCookies(url)
   }
 
   return supabaseResponse
