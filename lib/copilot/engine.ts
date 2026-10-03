@@ -24,6 +24,8 @@ export type CopilotIntent =
   | "INSURANCE_OPTIONS"
   | "WHY_HEALTH_SCORE"
   | "WHAT_SHOULD_I_DO_NEXT"
+  | "EMERGENCY_SAVINGS"
+  | "TAX_GUIDANCE"
   | "GENERAL_FINNA_HELP"
 
 export interface CopilotResponse {
@@ -169,6 +171,37 @@ export function classifyIntent(query: string): { intent: CopilotIntent; language
     q.includes("कदम")
   ) {
     return { intent: "WHAT_SHOULD_I_DO_NEXT", language }
+  }
+
+  // 8. Emergency Fund & Monthly Savings
+  if (
+    q.includes("emergency") ||
+    q.includes("emergency fund") ||
+    q.includes("savings") ||
+    q.includes("saving") ||
+    q.includes("save") ||
+    q.includes("சேமிப்பு") ||
+    q.includes("அவசர நிதி") ||
+    q.includes("बचत") ||
+    q.includes("इमरजेंसी फंड")
+  ) {
+    return { intent: "EMERGENCY_SAVINGS", language }
+  }
+
+  // 9. Tax Guidance (44AD / 44ADA / TDS)
+  if (
+    q.includes("tax") ||
+    q.includes("44ad") ||
+    q.includes("44ada") ||
+    q.includes("tds") ||
+    q.includes("itr") ||
+    q.includes("income tax") ||
+    q.includes("வரி") ||
+    q.includes("டாக்ஸ்") ||
+    q.includes("टैक्स") ||
+    q.includes("आयकर")
+  ) {
+    return { intent: "TAX_GUIDANCE", language }
   }
 
   return { intent: "GENERAL_FINNA_HELP", language }
@@ -644,6 +677,96 @@ export function generateCopilotAnswer(
           formula: "ActionRank = PrioritySort(SavingsDeficit, WelfareEntitlements, TaxRefunds)",
           inputs: { MonthlySurplus: surplus, WeeklySavingsGoal: 300, PotentialTdsRefund: 3888 },
           benchmarkReference: "FinQA Multi-step Arithmetic Program",
+        },
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 8. Emergency Fund & Monthly Savings
+    // -------------------------------------------------------------
+    case "EMERGENCY_SAVINGS": {
+      const netIncome = calc.income.totalMonthlyNet
+      const totalExpenses = calc.expenses.totalMonthlyExpenses
+      const surplus = Math.max(1200, netIncome - totalExpenses)
+      const currentSavings = calc.savings.liquidBankSavings
+      const monthlySavingsLow = Math.max(1200, Math.round(surplus * 0.22 / 100) * 100)
+      const monthlySavingsHigh = Math.max(monthlySavingsLow + 1200, Math.round(surplus * 0.35 / 100) * 100)
+      const emergencyTarget = Math.max(25000, Math.round((totalExpenses * 2.5) / 1000) * 1000)
+      const gap = Math.max(0, emergencyTarget - currentSavings)
+      const timelineMonths = Math.max(2, Math.ceil(gap / ((monthlySavingsLow + monthlySavingsHigh) / 2)))
+
+      const structuredResult = {
+        monthlySavingsRange: `₹${monthlySavingsLow}–₹${monthlySavingsHigh}`,
+        emergencyTarget,
+        currentSavings,
+        timelineMonths,
+      }
+
+      const explanationText =
+        `### 🛡️ Emergency Reserve & Savings Estimation${estimateTag}\n\n` +
+        `• **Estimated Monthly Savings Potential:** **₹${monthlySavingsLow.toLocaleString("en-IN")}–₹${monthlySavingsHigh.toLocaleString("en-IN")}/month** (based on your details)\n` +
+        `• **Recommended Emergency-Fund Target:** **₹${emergencyTarget.toLocaleString("en-IN")}**\n` +
+        `  *This covers ~2.5 months of your fixed survival costs (rent, EMI, fuel, basic groceries) to protect you from unexpected pauses or medical bills.*\n` +
+        `• **Current Liquid Reserve:** ₹${currentSavings.toLocaleString("en-IN")}\n` +
+        `• **Estimated Timeline to Target:** **~${timelineMonths} months** at a steady savings pace of ~₹${Math.round((monthlySavingsLow + monthlySavingsHigh) / 2).toLocaleString("en-IN")}/month.\n\n` +
+        `*Confidence: Medium. You can adjust your savings or expense assumptions at any time in FINNA Copilot.*`
+
+      const audioText = `Your estimated monthly savings potential is ₹${monthlySavingsLow} to ₹${monthlySavingsHigh}. Your emergency fund target is ₹${emergencyTarget}, achievable in about ${timelineMonths} months.`
+
+      return {
+        intent,
+        language,
+        structuredResult,
+        explanationText,
+        audioText,
+        mathematicalReasoning: {
+          formula: "EmergencyTarget = EssentialMonthlyExpenses * 2.5; SavingsRate = Surplus * 0.30",
+          inputs: { EssentialExpenses: totalExpenses, EmergencyTarget: emergencyTarget, MonthlySavings: monthlySavingsLow },
+          benchmarkReference: "FinQA Multi-step Arithmetic Program",
+        },
+      }
+    }
+
+    // -------------------------------------------------------------
+    // 9. Tax Guidance (44AD / 44ADA / TDS)
+    // -------------------------------------------------------------
+    case "TAX_GUIDANCE": {
+      const netIncome = calc.income.totalMonthlyNet
+      const annualGross = Math.round(netIncome * 12 * 1.1)
+      const estimatedAnnualTds = Math.round(annualGross * 0.01)
+
+      const structuredResult = {
+        annualGross,
+        presumptiveScheme: "Section 44AD / 44ADA",
+        deemedProfitRate: "6% of digital receipts",
+        taxLiability: "₹0 (Rebate u/s 87A)",
+        estimatedAnnualTds,
+      }
+
+      const explanationText =
+        `### 📑 Gig Worker Tax Guidance (Section 44AD & TDS)${estimateTag}\n\n` +
+        `As a platform delivery partner or independent gig worker, you are eligible for India's **Presumptive Taxation Scheme**:\n\n` +
+        `1. **Section 44AD Presumptive Income:**\n` +
+        `   • Because gig payments arrive digitally via UPI/Netbanking, your deemed taxable profit is assumed at only **6% of gross receipts**.\n` +
+        `   • You do **not** need to maintain complex accounting ledgers or get a balance sheet audited by a CA.\n\n` +
+        `2. **Zero Tax Liability Under Section 87A:**\n` +
+        `   • Under the New Tax Regime, total net income up to **₹7,00,000/year** qualifies for the Section 87A tax rebate, meaning your actual income tax payable is **₹0**.\n\n` +
+        `3. **Claiming 100% of Your 1% TDS Back:**\n` +
+        `   • Swiggy, Zomato, and Uber deduct 1% TDS under Section 194-O (~**₹${estimatedAnnualTds.toLocaleString("en-IN")}/year** for your volume).\n` +
+        `   • By filing **ITR-4 (Sugam)** before July 31st each year, you can claim this full TDS amount back as a direct bank account refund.`
+
+      const audioText = `Under Section 44AD presumptive taxation, your income tax liability is zero. You can file ITR-4 to claim a full refund of the 1% TDS deducted by gig platforms.`
+
+      return {
+        intent,
+        language,
+        structuredResult,
+        explanationText,
+        audioText,
+        mathematicalReasoning: {
+          formula: "TaxPayable = Max(0, TaxOn(DeemedIncome(GrossReceipts * 0.06)) - Rebate87A)",
+          inputs: { AnnualGross: annualGross, DeemedIncome: Math.round(annualGross * 0.06), TaxLiability: 0 },
+          benchmarkReference: "India Open Data Portal (data.gov.in)",
         },
       }
     }
