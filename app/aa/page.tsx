@@ -67,7 +67,7 @@ const AA_PROVIDERS = [
 
 export default function AccountAggregatorPage() {
   const [step, setStep] = React.useState<
-    "init" | "artefact" | "otp2" | "webview" | "decrypting" | "review" | "active"
+    "init" | "artefact" | "webview" | "decrypting" | "review" | "active"
   >("init")
   const [selectedBank, setSelectedBank] = React.useState<BankOption>(SUPPORTED_BANKS[0])
   const [selectedAA, setSelectedAA] = React.useState(AA_PROVIDERS[0])
@@ -81,14 +81,6 @@ export default function AccountAggregatorPage() {
   const [consentStatus, setConsentStatus] = React.useState<string>("PENDING")
   const [configError, setConfigError] = React.useState<string | null>(null)
   const [sessionId, setSessionId] = React.useState<string>("")
-
-  // Bank Second OTP State
-  const [secondOtp, setSecondOtp] = React.useState("")
-  const [otpCountdown, setOtpCountdown] = React.useState(45)
-  const [canResendOtp, setCanResendOtp] = React.useState(false)
-  const [otpError, setOtpError] = React.useState<string | null>(null)
-  const [otpSuccessMessage, setOtpSuccessMessage] = React.useState<string | null>(null)
-  const [isVerifyingOtp, setIsVerifyingOtp] = React.useState(false)
 
   // Transactions & Accounts state
   const [accounts, setAccounts] = React.useState<any[]>([])
@@ -119,21 +111,6 @@ export default function AccountAggregatorPage() {
       // Ignored
     }
   }, [])
-
-  // Second OTP Countdown Timer
-  React.useEffect(() => {
-    if (step !== "otp2") return
-    if (otpCountdown <= 0) {
-      setCanResendOtp(true)
-      return
-    }
-
-    const timer = setInterval(() => {
-      setOtpCountdown((prev) => prev - 1)
-    }, 1000)
-
-    return () => clearInterval(timer)
-  }, [step, otpCountdown])
 
   // Handle redirect callback from Setu (when returning from Setu consent portal)
   React.useEffect(() => {
@@ -197,55 +174,7 @@ export default function AccountAggregatorPage() {
     }
   }, [step, consentId])
 
-  // Trigger Second OTP Step (In-App Flow)
-  const handleProceedToBankOtp = () => {
-    const generatedId = `AA-SETU-${selectedBank.shortCode}-${Date.now().toString(36).toUpperCase()}`
-    setConsentId(generatedId)
-    setSecondOtp("")
-    setOtpCountdown(45)
-    setCanResendOtp(false)
-    setOtpError(null)
-    setOtpSuccessMessage(
-      `6-digit OTP sent by ${selectedBank.name} to registered number +91-XXXXXX${mobileNumber.slice(-4)}`
-    )
-    setStep("otp2")
-  }
-
-  // Resend Second OTP Handler
-  const handleResendSecondOtp = () => {
-    setOtpCountdown(45)
-    setCanResendOtp(false)
-    setOtpError(null)
-    setSecondOtp("")
-    setOtpSuccessMessage(
-      `New 6-digit OTP generated and sent to +91-XXXXXX${mobileNumber.slice(-4)}. Valid for 5 minutes.`
-    )
-  }
-
-  // Verify Second OTP (Bank FIP Approval)
-  const handleVerifySecondOtp = async () => {
-    const cleanOtp = secondOtp.trim()
-    setOtpError(null)
-
-    if (cleanOtp.length !== 6) {
-      setOtpError("Please enter the complete 6-digit OTP received from your bank.")
-      return
-    }
-
-    setIsVerifyingOtp(true)
-    try {
-      // In sandbox mode, verify 6-digit code
-      const currentConsentId = consentId || `AA-SETU-${selectedBank.shortCode}-${Date.now()}`
-      await new Promise((resolve) => setTimeout(resolve, 800))
-      handleConsentApproved(currentConsentId)
-    } catch (err: any) {
-      setOtpError(err.message || "Failed to verify bank OTP. Please check the code or click Resend.")
-    } finally {
-      setIsVerifyingOtp(false)
-    }
-  }
-
-  // Trigger Setu Hosted Consent Creation (External WebView flow)
+  // Trigger Real Setu Hosted Consent Creation (Uses Setu API Keys & Opens Real OTP Screen)
   const handleCreateSetuConsent = async () => {
     setIsLoading(true)
     setConfigError(null)
@@ -262,17 +191,24 @@ export default function AccountAggregatorPage() {
 
       setConsentId(res.consentId)
       setConsentStatus(res.status)
-      setConsentUrl(res.url || `https://fiu-sandbox.setu.co/consents/${res.consentId}`)
-      setStep("webview")
+      const targetUrl = res.url || `https://fiu-sandbox.setu.co/consents/${res.consentId}`
+      setConsentUrl(targetUrl)
+
+      // Direct redirection to the actual Setu AA portal URL for real OTP verification
+      if (res.url) {
+        window.location.href = res.url
+      } else {
+        setStep("webview")
+      }
     } catch (err: any) {
       console.error("Create consent error:", err)
       if (err.missingConfig || err.status === 503) {
         setConfigError(
           err.message ||
-            "Setu Sandbox Credentials Required: Please add SETU_CLIENT_ID, SETU_CLIENT_SECRET, and SETU_PRODUCT_INSTANCE_ID to your .env file."
+            "Setu Sandbox Credentials Required: Please verify SETU_CLIENT_ID, SETU_CLIENT_SECRET, and SETU_PRODUCT_INSTANCE_ID."
         )
       } else {
-        setConfigError(`Notice: ${err.message}. You can use the in-app Bank OTP verification below.`)
+        setConfigError(`Setu Gateway Error: ${err.message}`)
       }
     } finally {
       setIsLoading(false)
@@ -516,10 +452,10 @@ export default function AccountAggregatorPage() {
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <button
                 type="button"
-                onClick={handleProceedToBankOtp}
+                onClick={handleCreateSetuConsent}
                 className="inline-flex items-center justify-center bg-white text-black font-semibold text-xs rounded-xl h-9 px-4 hover:bg-[#e5e5e5] transition cursor-pointer"
               >
-                Use Direct Bank OTP Verification →
+                Retry Setu AA Gateway →
               </button>
               <button
                 type="button"
@@ -756,148 +692,26 @@ export default function AccountAggregatorPage() {
               >
                 Back to Settings
               </Button>
-              <div className="flex flex-col sm:flex-row w-full sm:w-auto items-center gap-2">
-                <Button
-                  onClick={handleProceedToBankOtp}
-                  className="w-full sm:w-auto rounded-xl bg-black text-white hover:bg-black/90 h-11 px-6 font-semibold cursor-pointer text-xs shadow-xs"
-                >
-                  Verify Bank Account via OTP →
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleCreateSetuConsent}
-                  disabled={isLoading}
-                  className="w-full sm:w-auto rounded-xl border-[#e5e5e5] text-xs h-11 px-4 cursor-pointer text-[#737373] hover:text-black"
-                >
-                  Open Setu Portal Screen
-                </Button>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* STEP 3 (NEW): SECOND OTP - BANK / FIP VERIFICATION STEP */}
-        {step === "otp2" && (
-          <section className="rounded-3xl border border-[#e5e5e5] bg-white p-6 sm:p-10 shadow-sm space-y-6 animate-in fade-in-50">
-            <div className="flex items-start justify-between">
-              <div>
-                <span className="text-xs font-mono uppercase tracking-wider text-black bg-[#f5f5f5] px-3 py-1 rounded-full border border-[#e5e5e5]">
-                  Step 2 OTP · Bank Verification
-                </span>
-                <h2 className="text-2xl font-bold tracking-tight text-black mt-3">
-                  Enter Bank Approval Code (OTP)
-                </h2>
-                <p className="mt-1 text-sm text-[#737373]">
-                  Enter the 6-digit one-time password sent by <strong>{selectedBank.name}</strong> to link your deposit account ending in <strong>4921</strong>.
-                </p>
-              </div>
-              <div className="flex size-12 items-center justify-center rounded-2xl bg-[#fafafa] border border-[#e5e5e5] text-black shrink-0">
-                <KeyRound className="size-6 text-black" />
-              </div>
-            </div>
-
-            {/* Success Announcement */}
-            {otpSuccessMessage && (
-              <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50 text-xs text-emerald-800 flex items-start gap-2.5">
-                <CheckCircle2 className="size-4 text-emerald-600 shrink-0 mt-0.5" />
-                <div className="leading-relaxed">{otpSuccessMessage}</div>
-              </div>
-            )}
-
-            {/* Error Message */}
-            {otpError && (
-              <div className="p-4 rounded-2xl border border-red-200 bg-red-50 text-xs text-red-800 flex items-start gap-2.5">
-                <AlertCircle className="size-4 text-red-600 shrink-0 mt-0.5" />
-                <div className="leading-relaxed">{otpError}</div>
-              </div>
-            )}
-
-            {/* OTP Input Container */}
-            <div className="py-4 flex flex-col items-center justify-center space-y-4">
-              <div className="flex justify-center w-full">
-                <InputOTP
-                  maxLength={6}
-                  value={secondOtp}
-                  onChange={(val) => {
-                    setSecondOtp(val)
-                    if (otpError) setOtpError(null)
-                  }}
-                  className="gap-2 sm:gap-3"
-                >
-                  <InputOTPGroup className="gap-2 sm:gap-2.5">
-                    <InputOTPSlot index={0} className="size-12 sm:size-14 text-lg font-bold rounded-xl border-[#e5e5e5] bg-[#fafafa]" />
-                    <InputOTPSlot index={1} className="size-12 sm:size-14 text-lg font-bold rounded-xl border-[#e5e5e5] bg-[#fafafa]" />
-                    <InputOTPSlot index={2} className="size-12 sm:size-14 text-lg font-bold rounded-xl border-[#e5e5e5] bg-[#fafafa]" />
-                    <InputOTPSlot index={3} className="size-12 sm:size-14 text-lg font-bold rounded-xl border-[#e5e5e5] bg-[#fafafa]" />
-                    <InputOTPSlot index={4} className="size-12 sm:size-14 text-lg font-bold rounded-xl border-[#e5e5e5] bg-[#fafafa]" />
-                    <InputOTPSlot index={5} className="size-12 sm:size-14 text-lg font-bold rounded-xl border-[#e5e5e5] bg-[#fafafa]" />
-                  </InputOTPGroup>
-                </InputOTP>
-              </div>
-
-              {/* Countdown Timer & Resend Button */}
-              <div className="flex items-center gap-2 text-xs text-[#737373]">
-                {!canResendOtp ? (
-                  <div className="flex items-center gap-1.5 font-mono">
-                    <Clock3 className="size-3.5 text-[#737373]" />
-                    <span>Resend OTP in <strong>{otpCountdown}s</strong></span>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleResendSecondOtp}
-                    className="font-bold text-black underline underline-offset-4 hover:text-[#525252] cursor-pointer"
-                  >
-                    Didn&apos;t receive code? Resend OTP
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Test Helper / Sandbox Bypass Note */}
-            <div className="rounded-2xl border border-[#e5e5e5] bg-[#fafafa] p-4 text-xs text-[#525252] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div>
-                <span className="font-bold text-black block">Setu Sandbox Testing:</span>
-                <span className="text-[#737373]">
-                  Any 6-digit code or test code <strong>123456</strong> verifies instantly.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSecondOtp("123456")}
-                className="text-xs font-mono font-semibold bg-white border border-[#e5e5e5] px-3 py-1.5 rounded-xl hover:bg-[#f0f0f0] transition cursor-pointer shrink-0"
-              >
-                Autofill 123456
-              </button>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-[#e5e5e5]">
               <Button
-                variant="outline"
-                onClick={() => setStep("artefact")}
-                className="w-full sm:w-auto rounded-xl border-[#e5e5e5] h-11 px-5 cursor-pointer text-xs"
-              >
-                Back
-              </Button>
-              <Button
-                onClick={handleVerifySecondOtp}
-                disabled={isVerifyingOtp || secondOtp.length !== 6}
+                onClick={handleCreateSetuConsent}
+                disabled={isLoading}
                 className="w-full sm:w-auto rounded-xl bg-black text-white hover:bg-black/90 h-11 px-8 font-semibold cursor-pointer text-xs shadow-xs"
               >
-                {isVerifyingOtp ? (
+                {isLoading ? (
                   <>
-                    <Loader2 className="size-4 mr-2 animate-spin" /> Verifying Bank OTP...
+                    <Loader2 className="size-4 mr-2 animate-spin" /> Connecting to Setu AA Gateway...
                   </>
                 ) : (
-                  "Verify & Authorize Account →"
+                  <>
+                    Connect to Setu AA Gateway →
+                  </>
                 )}
               </Button>
             </div>
           </section>
         )}
 
-        {/* STEP 4: Setu Hosted Consent Webview Container */}
+        {/* STEP 3: Setu Hosted Consent Webview Container */}
         {step === "webview" && (
           <section className="rounded-3xl border border-[#e5e5e5] bg-white p-6 sm:p-10 shadow-sm space-y-6">
             <div className="flex items-center justify-between">
@@ -927,25 +741,35 @@ export default function AccountAggregatorPage() {
                   <Lock className="size-3.5 text-black" />
                   <span className="font-mono text-[11px] text-black">fiu-sandbox.setu.co</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleProceedToBankOtp}
-                  className="inline-flex items-center gap-1 font-semibold text-black hover:underline cursor-pointer"
-                >
-                  Switch to In-App OTP Entry →
-                </button>
+                {consentUrl && (
+                  <a
+                    href={consentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold text-black hover:underline cursor-pointer"
+                  >
+                    Open in Full Window <ExternalLink className="size-3" />
+                  </a>
+                )}
               </div>
               <div className="flex-1 w-full bg-white relative">
-                <iframe
-                  src={consentUrl}
-                  title="Setu AA Hosted Consent Webview"
-                  className="w-full h-full border-0"
-                  sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-modals"
-                />
+                {consentUrl ? (
+                  <iframe
+                    src={consentUrl}
+                    title="Setu AA Hosted Consent Webview"
+                    className="w-full h-full border-0"
+                    sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation allow-modals"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                    <Loader2 className="size-8 animate-spin text-black mb-3" />
+                    <p className="text-xs text-[#737373]">Loading Setu Account Aggregator Gateway...</p>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Polling & Manual Simulation actions */}
+            {/* Polling & Actions */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <div className="flex items-center gap-2 text-xs text-[#737373]">
                 <Loader2 className="size-3.5 animate-spin text-black" />
@@ -953,19 +777,24 @@ export default function AccountAggregatorPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  onClick={handleProceedToBankOtp}
-                  className="rounded-xl border-[#e5e5e5] text-xs h-10 px-4 cursor-pointer"
-                >
-                  Enter Bank OTP Directly
-                </Button>
+                {consentUrl && (
+                  <Button
+                    onClick={() => {
+                      if (typeof window !== "undefined") {
+                        window.location.href = consentUrl
+                      }
+                    }}
+                    className="rounded-xl bg-black text-white hover:bg-black/90 text-xs h-10 px-5 cursor-pointer shadow-xs"
+                  >
+                    Proceed to Setu Screen <ArrowRight className="size-3.5 ml-1.5" />
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   onClick={handleSimulateApproval}
                   className="rounded-xl border-[#e5e5e5] text-xs h-10 px-4 cursor-pointer"
                 >
-                  Simulate Webview Approval
+                  Quick Demo (Simulate)
                 </Button>
                 <Button
                   variant="outline"
