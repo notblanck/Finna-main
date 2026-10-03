@@ -118,6 +118,21 @@ export function CityOnboardingModal({
     }
   }, [isOpen, isEditingDetails])
 
+  // Coordinate overlays: close if another overlay opens, and notify others when this opens
+  React.useEffect(() => {
+    if (!isOpen) return
+
+    window.dispatchEvent(new CustomEvent("finna:close-all-overlays", { detail: { source: "city-onboarding" } }))
+
+    const handleCloseOverlays = (e: any) => {
+      if (e.detail?.source !== "city-onboarding") {
+        onClose()
+      }
+    }
+    window.addEventListener("finna:close-all-overlays", handleCloseOverlays)
+    return () => window.removeEventListener("finna:close-all-overlays", handleCloseOverlays)
+  }, [isOpen, onClose])
+
   // Available cities for selected state
   const availableCities = React.useMemo(() => {
     return getCitiesForState(state)
@@ -287,7 +302,7 @@ export function CityOnboardingModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in-0 duration-200">
+    <div className="fixed inset-0 z-[50] flex items-center justify-center p-3 sm:p-4 bg-black/60 animate-in fade-in-0 duration-200">
       <motion.div
         initial={{ opacity: 0, scale: 0.96, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}

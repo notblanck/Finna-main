@@ -88,6 +88,7 @@ export function CashflowCalendar({ onBack }: CashflowCalendarProps) {
         const dayOfWeekIdx = targetDate.getDay()
         const dayOfWeek = weekdays[dayOfWeekIdx]
         const dayNumber = targetDate.getDate()
+        const monthName = monthNames[targetDate.getMonth()]
         const y = targetDate.getFullYear()
         const m = String(targetDate.getMonth() + 1).padStart(2, "0")
         const d = String(dayNumber).padStart(2, "0")

@@ -78,7 +78,7 @@ export function CopilotAvatar({
   }[size]
 
   // Head and Breathing Animation Variants (GPU-only transforms)
-  const shouldersVariants = {
+  const shouldersVariants: any = {
     idle: {
       y: prefersReducedMotion ? 0 : [0, -1.2, 0],
       transition: { duration: 3.5, repeat: Infinity, ease: "easeInOut" },
@@ -97,7 +97,7 @@ export function CopilotAvatar({
     },
   }
 
-  const headVariants = {
+  const headVariants: any = {
     idle: {
       y: prefersReducedMotion ? 0 : [0, -1.8, 0],
       rotate: prefersReducedMotion ? 0 : [0, 0.7, -0.7, 0],

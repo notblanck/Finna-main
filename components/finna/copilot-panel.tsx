@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import { createPortal } from "react-dom"
+import { usePathname } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   MessageSquare,
@@ -215,6 +217,92 @@ function TypedAssistantContent({
 export function CopilotPanel() {
   const [isOpen, setIsOpen] = React.useState(false)
   const [isExpanded, setIsExpanded] = React.useState(false)
+  const [mounted, setMounted] = React.useState(false)
+  const [prefersReducedMotion, setPrefersReducedMotion] = React.useState(false)
+  const pathname = usePathname()
+
+  // Coordinated Open and Close handlers
+  const handleOpen = React.useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("finna:close-all-overlays", { detail: { source: "copilot" } }))
+      window.dispatchEvent(new CustomEvent("finna:copilot-state", { detail: { isOpen: true } }))
+    }
+    setIsOpen(true)
+  }, [])
+
+  const handleClose = React.useCallback(() => {
+    if (typeof window !== "undefined") {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel()
+      }
+      window.dispatchEvent(new CustomEvent("finna:copilot-state", { detail: { isOpen: false } }))
+    }
+    setAvatarState("idle")
+    setIsOpen(false)
+  }, [])
+
+  // Track mount & prefers-reduced-motion
+  React.useEffect(() => {
+    setMounted(true)
+    if (typeof window !== "undefined") {
+      const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)")
+      setPrefersReducedMotion(mediaQuery.matches)
+      const handleChange = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches)
+      mediaQuery.addEventListener("change", handleChange)
+      return () => mediaQuery.removeEventListener("change", handleChange)
+    }
+  }, [])
+
+  // Auto-close on route changes
+  React.useEffect(() => {
+    if (isOpen) {
+      handleClose()
+    }
+  }, [pathname, handleClose])
+
+  // Overlay coordination & Escape key handler
+  React.useEffect(() => {
+    const handleCloseOverlays = (e: any) => {
+      if (e.detail?.source !== "copilot") {
+        handleClose()
+      }
+    }
+    const handleOpenCopilot = () => handleOpen()
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        handleClose()
+      }
+    }
+
+    window.addEventListener("finna:close-all-overlays", handleCloseOverlays)
+    window.addEventListener("finna:close-copilot", handleClose)
+    window.addEventListener("finna:open-copilot", handleOpenCopilot)
+    window.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      window.removeEventListener("finna:close-all-overlays", handleCloseOverlays)
+      window.removeEventListener("finna:close-copilot", handleClose)
+      window.removeEventListener("finna:open-copilot", handleOpenCopilot)
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isOpen, handleClose, handleOpen])
+
+  // Single body scroll lock with clean restoration on close, route change, or unmount
+  React.useEffect(() => {
+    if (typeof document === "undefined") return
+
+    if (isOpen) {
+      const prevOverflow = document.body.style.overflow
+      const prevTouchAction = document.body.style.touchAction
+      document.body.style.overflow = "hidden"
+      document.body.style.touchAction = "none"
+
+      return () => {
+        document.body.style.overflow = prevOverflow
+        document.body.style.touchAction = prevTouchAction
+      }
+    }
+  }, [isOpen])
   const [input, setInput] = React.useState("")
   const [isLoading, setIsLoading] = React.useState(false)
   const [language, setLanguage] = React.useState<SupportedLang>("en")
@@ -623,10 +711,9 @@ export function CopilotPanel() {
       {!isOpen && (
         <button
           type="button"
-          onClick={() => setIsOpen(true)}
-          className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-40 flex items-center gap-2.5 h-12 pl-2 pr-4 rounded-full bg-black text-white hover:bg-[#222222] dark:bg-white dark:text-black dark:hover:bg-[#f0f0f0] shadow-xl border border-[#262626] dark:border-[#e5e5e5] transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
+          onClick={handleOpen}
+          className="fixed bottom-20 md:bottom-6 right-4 sm:right-6 z-[45] flex items-center gap-2.5 h-12 pl-2 pr-4 rounded-full bg-black text-white hover:bg-[#222222] dark:bg-white dark:text-black dark:hover:bg-[#f0f0f0] shadow-xl border border-[#262626] dark:border-[#e5e5e5] transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
           aria-label="Open FINNA Copilot"
-          style={{ transform: "translateZ(0)" }}
         >
           <CopilotAvatar state={avatarState} size="sm" mouthShapeIndex={mouthShapeIndex} />
           <div className="flex flex-col text-left">
@@ -639,45 +726,69 @@ export function CopilotPanel() {
         </button>
       )}
 
-      {/* Main Floating Copilot Panel */}
-      <AnimatePresence>
-        {isOpen && (
-          <div className="fixed inset-0 z-50 pointer-events-none flex items-end sm:items-end sm:justify-end sm:p-6">
-            {/* Backdrop on mobile */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => {
-                if (typeof window !== "undefined" && "speechSynthesis" in window) {
-                  window.speechSynthesis.cancel()
-                }
-                setAvatarState("idle")
-                setIsOpen(false)
-              }}
-              className="absolute inset-0 bg-black/50 pointer-events-auto sm:hidden"
-            />
+      {/* Portal Copilot Sheet and Backdrop directly to document.body for guaranteed stacking order */}
+      {mounted && typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {isOpen && (
+            <>
+              {/* Separate Backdrop - Sibling 1 at z-[50], strictly behind the sheet */}
+              <motion.div
+                key="copilot-backdrop"
+                initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                onClick={handleClose}
+                className="fixed inset-0 z-[50] bg-black/30 pointer-events-auto cursor-pointer"
+                aria-hidden="true"
+              />
 
-            {/* Polished Floating Chat Panel */}
-            <motion.div
-              initial={{ opacity: 0, y: 30, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 30, scale: 0.98 }}
-              transition={{ duration: 0.22, ease: "easeOut" }}
-              className={`pointer-events-auto flex flex-col justify-between overflow-hidden bg-white dark:bg-[#121212] border border-[#e5e5e5] dark:border-[#262626] shadow-2xl transition-all duration-200
-                w-full sm:h-[680px] sm:max-h-[calc(100vh-3rem)]
-                h-[92vh] max-h-[92vh] rounded-t-3xl sm:rounded-2xl
-                ${isExpanded ? "sm:w-[680px]" : "sm:w-[440px]"}
-              `}
-              style={{
-                transform: "translateZ(0)",
-                WebkitFontSmoothing: "antialiased",
-              }}
-            >
-              {/* Mobile Drag Handle Bar */}
-              <div className="sm:hidden pt-2.5 pb-1 flex justify-center bg-white dark:bg-[#121212]">
-                <div className="w-12 h-1.5 rounded-full bg-[#d4d4d4] dark:bg-[#333333]" />
-              </div>
+              {/* Copilot Bottom Sheet / Panel - Sibling 2 at z-[60], clearly on top */}
+              <motion.div
+                key="copilot-sheet"
+                role="dialog"
+                aria-modal="true"
+                aria-label="FINNA Copilot Financial AI Assistant"
+                initial={
+                  prefersReducedMotion
+                    ? { y: 0, opacity: 1 }
+                    : { y: "100%", opacity: 1 }
+                }
+                animate={{ y: 0, opacity: 1 }}
+                exit={
+                  prefersReducedMotion
+                    ? { y: 0, opacity: 0 }
+                    : { y: "100%", opacity: 1 }
+                }
+                transition={
+                  prefersReducedMotion
+                    ? { duration: 0 }
+                    : { duration: 0.22, ease: [0.16, 1, 0.3, 1] }
+                }
+                className={`fixed z-[60] pointer-events-auto flex flex-col justify-between overflow-hidden
+                  bg-white dark:bg-[#121212] border border-[#e5e5e5] dark:border-[#262626] shadow-2xl
+                  bottom-0 inset-x-0 h-[90dvh] max-h-[90dvh] rounded-t-3xl
+                  sm:inset-x-auto sm:bottom-6 sm:right-6 sm:h-[680px] sm:max-h-[calc(100vh-3rem)] sm:rounded-2xl
+                  ${isExpanded ? "sm:w-[680px]" : "sm:w-[440px]"}
+                `}
+                style={{
+                  opacity: 1,
+                  WebkitFontSmoothing: "antialiased",
+                }}
+              >
+                {/* Mobile Drag Handle Bar & Dismiss Affordance */}
+                <div
+                  className="sm:hidden pt-3 pb-1.5 flex justify-center bg-white dark:bg-[#121212] shrink-0 touch-none select-none cursor-grab active:cursor-grabbing"
+                  onClick={handleClose}
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Close bottom sheet"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") handleClose()
+                  }}
+                >
+                  <div className="w-12 h-1.5 rounded-full bg-[#d4d4d4] dark:bg-[#333333]" />
+                </div>
 
               {/* Compact Header (Inspired by GitHub Copilot chat structure) */}
               <header className="px-4 py-3 sm:px-4 sm:py-3.5 border-b border-[#e5e5e5] dark:border-[#262626] flex items-center justify-between bg-white dark:bg-[#121212] shrink-0">
@@ -742,14 +853,9 @@ export function CopilotPanel() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => {
-                      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-                        window.speechSynthesis.cancel()
-                      }
-                      setAvatarState("idle")
-                      setIsOpen(false)
-                    }}
+                    onClick={handleClose}
                     title="Minimize"
+                    aria-label="Minimize FINNA Copilot"
                     className="size-7 sm:size-8 rounded-lg text-[#737373] hover:text-black dark:hover:text-white hover:bg-[#f5f5f5] dark:hover:bg-[#1f1f1f] cursor-pointer"
                   >
                     <Minus className="size-3.5" />
@@ -759,14 +865,9 @@ export function CopilotPanel() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => {
-                      if (typeof window !== "undefined" && "speechSynthesis" in window) {
-                        window.speechSynthesis.cancel()
-                      }
-                      setAvatarState("idle")
-                      setIsOpen(false)
-                    }}
+                    onClick={handleClose}
                     title="Close"
+                    aria-label="Close FINNA Copilot"
                     className="size-7 sm:size-8 rounded-lg text-[#737373] hover:text-black dark:hover:text-white hover:bg-[#f5f5f5] dark:hover:bg-[#1f1f1f] cursor-pointer"
                   >
                     <X className="size-4" />
@@ -820,7 +921,8 @@ export function CopilotPanel() {
               {/* Messages Body / Empty State */}
               <div
                 ref={scrollRef}
-                className="flex-1 overflow-y-auto p-4 space-y-4 bg-white dark:bg-[#121212] overflow-x-hidden"
+                className="flex-1 overflow-y-auto p-4 space-y-4 bg-white dark:bg-[#121212] overflow-x-hidden overscroll-contain"
+                style={{ WebkitOverflowScrolling: "touch" }}
               >
                 {/* EMPTY STATE */}
                 {messages.length === 0 && (
@@ -1146,9 +1248,11 @@ export function CopilotPanel() {
                 </div>
               </div>
             </motion.div>
-          </div>
+          </>
         )}
-      </AnimatePresence>
-    </>
-  )
+      </AnimatePresence>,
+      document.body
+    )}
+  </>
+)
 }

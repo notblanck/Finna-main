@@ -1,6 +1,7 @@
 "use client"
 
 import { EstimatedFinancialProfile, computeLocalFallbackProfile } from "./city-baselines"
+export type { EstimatedFinancialProfile } from "./city-baselines"
 import { getArunMasterData, updateArunMasterData } from "./arun-master"
 import { getFutureGigData, updateFutureGigData } from "./gig-data-layer"
 

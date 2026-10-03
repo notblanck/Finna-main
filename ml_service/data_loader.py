@@ -1,272 +1,129 @@
-"""
-FINNA City Dataset Loader & Validator
-Validates schema, checks ranges, outliers, missing values, duplicates,
-and compiles city-level dataset averages (the plain average baseline).
+"""Load FINNA's replaceable worker, city-average, and seasonality datasets.
+
+The files deliberately have distinct schemas: worker observations train the
+model, city averages are the prediction baseline/fallback, and seasonality is a
+month-level input. Compatible real datasets can replace them unchanged.
 """
 
 import os
-import glob
-import json
-import logging
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Any, Dict, Tuple
+
 import pandas as pd
-import numpy as np
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger("finna_data_loader")
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
+WORKER_FILE = "finna_worker_samples.csv"
+CITY_AVERAGES_FILE = "finna_city_averages.csv"
+SEASONALITY_FILE = "finna_seasonality.csv"
 
-REQUIRED_COLUMNS = [
-    "state",
-    "city",
-    "city_tier",
-    "avg_gig_weekly_income",
-    "income_std",
-    "avg_monthly_rent",
-    "avg_monthly_food_utilities",
-    "avg_transport_fuel",
-    "avg_emi_burden",
-    "cost_of_living_index",
-    "platform_type",
-    "month_season_factor",
-    "typical_weekly_hours",
-    "safe_savings_capacity",
-    "source",
-    "year",
-    "synthetic"
-]
-
-NUMERIC_COLUMNS = [
-    "avg_gig_weekly_income",
-    "income_std",
-    "avg_monthly_rent",
-    "avg_monthly_food_utilities",
-    "avg_transport_fuel",
-    "avg_emi_burden",
-    "cost_of_living_index",
-    "month_season_factor",
-    "typical_weekly_hours",
-    "safe_savings_capacity",
-    "year"
-]
-
-def validate_dataframe(df: pd.DataFrame, filename: str) -> Tuple[bool, List[str], List[str]]:
-    """
-    Validates a loaded DataFrame against the FINNA schema.
-    Returns (is_valid, errors, warnings)
-    """
-    errors: List[str] = []
-    warnings: List[str] = []
-
-    # 1. Check required columns
-    missing_cols = [c for c in REQUIRED_COLUMNS if c not in df.columns]
-    if missing_cols:
-        errors.append(f"[{filename}] Missing required columns: {missing_cols}")
-
-    if errors:
-        return False, errors, warnings
-
-    # 2. Check empty or null counts
-    for col in REQUIRED_COLUMNS:
-        null_count = df[col].isnull().sum()
-        if null_count > 0:
-            errors.append(f"[{filename}] Column '{col}' has {null_count} null/NaN values.")
-
-    # 3. Numeric column validation
-    for col in NUMERIC_COLUMNS:
-        if not pd.api.types.is_numeric_dtype(df[col]):
-            try:
-                df[col] = pd.to_numeric(df[col])
-            except Exception:
-                errors.append(f"[{filename}] Column '{col}' contains non-numeric data.")
-        
-        # Range/outlier sanity checks
-        if col == "avg_gig_weekly_income":
-            if (df[col] <= 0).any():
-                errors.append(f"[{filename}] 'avg_gig_weekly_income' contains non-positive values.")
-            if (df[col] > 50000).any():
-                warnings.append(f"[{filename}] Extreme weekly income detected (> 50,000 INR).")
-        elif col == "cost_of_living_index":
-            if (df[col] < 40).any() or (df[col] > 250).any():
-                warnings.append(f"[{filename}] Unusual cost_of_living_index outside [40, 250].")
-        elif col == "typical_weekly_hours":
-            if (df[col] < 5).any() or (df[col] > 110).any():
-                warnings.append(f"[{filename}] Weekly hours outside [5, 110].")
-
-    # 4. Check synthetic flag
-    if "synthetic" in df.columns:
-        # Normalize to boolean
-        if not pd.api.types.is_bool_dtype(df["synthetic"]):
-            df["synthetic"] = df["synthetic"].astype(str).str.lower().isin(["true", "1", "yes"])
-
-    # 5. Check duplicate rows
-    dup_count = df.duplicated(subset=["state", "city", "platform_type", "typical_weekly_hours", "month_season_factor"]).sum()
-    if dup_count > 0:
-        warnings.append(f"[{filename}] Found {dup_count} duplicate city-platform-hours condition rows.")
-
-    is_valid = len(errors) == 0
-    return is_valid, errors, warnings
+WORKER_REQUIRED = {
+    "state", "city", "city_tier", "platform_type", "month", "weekly_hours",
+    "experience_months", "vehicle_status", "cost_of_living_index", "weekly_income",
+    "income_volatility_pct", "monthly_rent", "monthly_food_utilities",
+    "monthly_transport_fuel", "monthly_emi_or_vehicle_rental",
+    "monthly_other_expenses", "monthly_expenses_total", "safe_monthly_savings",
+    "synthetic", "source", "year",
+}
+CITY_REQUIRED = {
+    "state", "city", "city_tier", "platform_type", "cost_of_living_index",
+    "avg_weekly_income", "income_std", "avg_monthly_rent",
+    "avg_monthly_food_utilities", "avg_monthly_transport_fuel", "avg_monthly_emi",
+    "avg_monthly_expenses_total", "avg_safe_monthly_savings", "n_samples",
+    "synthetic", "source", "year",
+}
+SEASONALITY_REQUIRED = {"city", "platform_type", "month", "avg_weekly_income", "season_factor", "synthetic"}
 
 
-def load_all_city_data(data_dir: Optional[str] = None) -> Tuple[pd.DataFrame, Dict[str, Any]]:
-    """
-    Loads and validates all CSV files from the data directory.
-    Returns (combined_df, validation_report)
-    """
-    if data_dir is None:
-        base = os.path.dirname(__file__)
-        data_dir = os.path.join(base, "data")
+def _path(filename: str, data_dir: str | None = None) -> str:
+    return os.path.join(data_dir or DATA_DIR, filename)
 
-    csv_files = glob.glob(os.path.join(data_dir, "*.csv"))
-    if not csv_files:
-        raise FileNotFoundError(f"No CSV datasets found in {data_dir}. Drop city CSVs into this folder.")
 
-    dfs: List[pd.DataFrame] = []
-    all_errors: List[str] = []
-    all_warnings: List[str] = []
-    file_summaries: List[Dict[str, Any]] = []
+def _read_required(filename: str, required: set[str], data_dir: str | None = None) -> pd.DataFrame:
+    path = _path(filename, data_dir)
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Required FINNA dataset is missing: {path}")
+    frame = pd.read_csv(path)
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ValueError(f"{filename} is missing required columns: {missing}")
+    if frame.empty:
+        raise ValueError(f"{filename} has no rows")
+    frame["synthetic"] = frame["synthetic"].astype(str).str.strip().str.lower().isin(["true", "1", "yes"])
+    return frame
 
-    print("=" * 70)
-    print(f"FINNA CITY DATASET LOADER: Scanning {len(csv_files)} file(s) in {data_dir}")
-    print("=" * 70)
 
-    for fpath in csv_files:
-        fname = os.path.basename(fpath)
-        try:
-            df = pd.read_csv(fpath)
-            valid, errs, warns = validate_dataframe(df, fname)
-            all_errors.extend(errs)
-            all_warnings.extend(warns)
+def load_finna_datasets(data_dir: str | None = None) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
+    """Return training rows, supplied city averages, seasons, and provenance."""
+    workers = _read_required(WORKER_FILE, WORKER_REQUIRED, data_dir)
+    city_averages = _read_required(CITY_AVERAGES_FILE, CITY_REQUIRED, data_dir)
+    seasonality = _read_required(SEASONALITY_FILE, SEASONALITY_REQUIRED, data_dir)
 
-            if valid:
-                dfs.append(df)
-                file_summaries.append({
-                    "file": fname,
-                    "rows": len(df),
-                    "cities": int(df["city"].nunique()),
-                    "states": int(df["state"].nunique()),
-                    "synthetic": bool(df["synthetic"].any()) if "synthetic" in df.columns else False,
-                    "status": "VALID"
-                })
-                print(f"  [OK] {fname}: {len(df)} rows, {df['city'].nunique()} cities (Synthetic={file_summaries[-1]['synthetic']})")
-            else:
-                file_summaries.append({
-                    "file": fname,
-                    "rows": len(df),
-                    "status": "INVALID",
-                    "errors": errs
-                })
-                print(f"  [FAIL] {fname}: {len(errs)} error(s)")
-                for e in errs:
-                    print(f"    - {e}")
-        except Exception as ex:
-            all_errors.append(f"[{fname}] Read error: {str(ex)}")
-            print(f"  [ERROR] {fname}: {str(ex)}")
+    for frame in (workers, city_averages, seasonality):
+        frame["city"] = frame["city"].astype(str).str.strip()
+        frame["platform_type"] = frame["platform_type"].astype(str).str.strip().str.lower()
+    for frame in (workers, city_averages):
+        frame["state"] = frame["state"].astype(str).str.strip()
+    workers["month"] = pd.to_numeric(workers["month"], errors="raise").astype(int)
+    seasonality["month"] = pd.to_numeric(seasonality["month"], errors="raise").astype(int)
+    if not workers["month"].between(1, 12).all() or not seasonality["month"].between(1, 12).all():
+        raise ValueError("month must be between 1 and 12 in worker and seasonality datasets")
 
-    if not dfs:
-        raise ValueError(f"No valid CSV datasets could be loaded from {data_dir}. Errors: {all_errors}")
-
-    combined = pd.concat(dfs, ignore_index=True)
-
-    # Standardize string fields
-    combined["state"] = combined["state"].astype(str).str.strip()
-    combined["city"] = combined["city"].astype(str).str.strip()
-    combined["platform_type"] = combined["platform_type"].astype(str).str.strip().str.lower()
-    combined["city_tier"] = combined["city_tier"].astype(str).str.strip()
+    training = workers.merge(
+        seasonality[["city", "platform_type", "month", "season_factor"]],
+        on=["city", "platform_type", "month"], how="left", validate="many_to_one",
+    )
+    if training["season_factor"].isna().any():
+        raise ValueError(f"{int(training['season_factor'].isna().sum())} worker rows have no matching seasonality entry")
 
     report = {
-        "total_files": len(csv_files),
-        "valid_files": len(dfs),
-        "total_rows": len(combined),
-        "unique_cities": int(combined["city"].nunique()),
-        "unique_states": int(combined["state"].nunique()),
-        "is_all_synthetic": bool(combined["synthetic"].all()),
-        "has_any_synthetic": bool(combined["synthetic"].any()),
-        "files": file_summaries,
-        "warnings": all_warnings,
-        "errors": all_errors
+        "dataset_files": [WORKER_FILE, CITY_AVERAGES_FILE, SEASONALITY_FILE],
+        "training_rows": len(training), "city_average_rows": len(city_averages),
+        "seasonality_rows": len(seasonality), "cities": sorted(training["city"].unique().tolist()),
+        "is_all_synthetic": bool(training["synthetic"].all() and city_averages["synthetic"].all() and seasonality["synthetic"].all()),
+        "has_any_synthetic": bool(training["synthetic"].any() or city_averages["synthetic"].any() or seasonality["synthetic"].any()),
+    }
+    return training, city_averages, seasonality, report
+
+
+def _aggregate(frame: pd.DataFrame) -> Dict[str, Any]:
+    return {
+        "avg_weekly_income": round(float(frame["avg_weekly_income"].mean()), 2),
+        "income_std": round(float(frame["income_std"].mean()), 2),
+        "avg_monthly_rent": round(float(frame["avg_monthly_rent"].mean()), 2),
+        "avg_monthly_food_utilities": round(float(frame["avg_monthly_food_utilities"].mean()), 2),
+        "avg_monthly_transport_fuel": round(float(frame["avg_monthly_transport_fuel"].mean()), 2),
+        "avg_monthly_emi": round(float(frame["avg_monthly_emi"].mean()), 2),
+        "avg_monthly_expenses_total": round(float(frame["avg_monthly_expenses_total"].mean()), 2),
+        "avg_safe_monthly_savings": round(float(frame["avg_safe_monthly_savings"].mean()), 2),
+        "cost_of_living_index": round(float(frame["cost_of_living_index"].mean()), 2),
+        "sample_count": int(frame["n_samples"].sum()), "synthetic": bool(frame["synthetic"].any()),
     }
 
-    print("-" * 70)
-    print(f"Summary: {len(combined)} rows loaded across {combined['city'].nunique()} cities and {combined['state'].nunique()} states.")
-    if report["has_any_synthetic"]:
-        print("  NOTE: Dataset contains synthetic / illustrative sample rows. UI will display 'Illustrative data'.")
-    if all_warnings:
-        print(f"  Warnings ({len(all_warnings)}):")
-        for w in all_warnings[:5]:
-            print(f"    * {w}")
-    print("=" * 70)
 
-    return combined, report
-
-
-def compute_dataset_city_baselines(df: pd.DataFrame) -> Dict[str, Any]:
-    """
-    Computes plain dataset averages (city-level, state-level, and national baseline).
-    This serves as:
-    1. The plain average baseline requested by the user.
-    2. Instant fallback if ML microservice is unreachable or city is unknown.
-    """
-    # 1. National baseline averages
-    national = {
-        "avg_gig_weekly_income": round(float(df["avg_gig_weekly_income"].mean()), 2),
-        "income_std": round(float(df["income_std"].mean()), 2),
-        "avg_monthly_rent": round(float(df["avg_monthly_rent"].mean()), 2),
-        "avg_monthly_food_utilities": round(float(df["avg_monthly_food_utilities"].mean()), 2),
-        "avg_transport_fuel": round(float(df["avg_transport_fuel"].mean()), 2),
-        "avg_emi_burden": round(float(df["avg_emi_burden"].mean()), 2),
-        "cost_of_living_index": round(float(df["cost_of_living_index"].mean()), 2),
-        "safe_savings_capacity": round(float(df["safe_savings_capacity"].mean()), 2),
-        "sample_count": int(len(df)),
-    }
-
-    # 2. State-level averages
-    state_baselines: Dict[str, Dict[str, Any]] = {}
-    for state_name, group in df.groupby("state"):
-        state_baselines[str(state_name)] = {
-            "avg_gig_weekly_income": round(float(group["avg_gig_weekly_income"].mean()), 2),
-            "income_std": round(float(group["income_std"].mean()), 2),
-            "avg_monthly_rent": round(float(group["avg_monthly_rent"].mean()), 2),
-            "avg_monthly_food_utilities": round(float(group["avg_monthly_food_utilities"].mean()), 2),
-            "avg_transport_fuel": round(float(group["avg_transport_fuel"].mean()), 2),
-            "avg_emi_burden": round(float(group["avg_emi_burden"].mean()), 2),
-            "cost_of_living_index": round(float(group["cost_of_living_index"].mean()), 2),
-            "safe_savings_capacity": round(float(group["safe_savings_capacity"].mean()), 2),
-            "sample_count": int(len(group)),
-        }
-
-    # 3. City-level averages
+def build_city_baselines(city_averages: pd.DataFrame, seasonality: pd.DataFrame) -> Dict[str, Any]:
+    """Serialize supplied city averages as the only profile baseline/fallback."""
     city_baselines: Dict[str, Dict[str, Any]] = {}
-    for city_name, group in df.groupby("city"):
-        state_val = str(group["state"].iloc[0])
-        tier_val = str(group["city_tier"].iloc[0])
-        is_synth = bool(group["synthetic"].any())
-
-        # Platform-specific weekly averages
-        platform_weekly: Dict[str, float] = {}
-        for p_type, p_group in group.groupby("platform_type"):
-            platform_weekly[str(p_type)] = round(float(p_group["avg_gig_weekly_income"].mean()), 2)
-
-        city_baselines[str(city_name)] = {
-            "city": str(city_name),
-            "state": state_val,
-            "city_tier": tier_val,
-            "avg_gig_weekly_income": round(float(group["avg_gig_weekly_income"].mean()), 2),
-            "income_std": round(float(group["income_std"].mean()), 2),
-            "avg_monthly_rent": round(float(group["avg_monthly_rent"].mean()), 2),
-            "avg_monthly_food_utilities": round(float(group["avg_monthly_food_utilities"].mean()), 2),
-            "avg_transport_fuel": round(float(group["avg_transport_fuel"].mean()), 2),
-            "avg_emi_burden": round(float(group["avg_emi_burden"].mean()), 2),
-            "cost_of_living_index": round(float(group["cost_of_living_index"].mean()), 2),
-            "safe_savings_capacity": round(float(group["safe_savings_capacity"].mean()), 2),
-            "platform_weekly_averages": platform_weekly,
-            "sample_count": int(len(group)),
-            "synthetic": is_synth,
-            "source": str(group["source"].iloc[0]),
-            "year": int(group["year"].iloc[0]),
-        }
+    for city, group in city_averages.groupby("city", sort=True):
+        first = group.iloc[0]
+        values = _aggregate(group)
+        values.update({
+            "city": city, "state": str(first["state"]), "city_tier": str(first["city_tier"]),
+            "platform_averages": {
+                str(row.platform_type): {
+                    "avg_weekly_income": float(row.avg_weekly_income), "income_std": float(row.income_std),
+                    "avg_monthly_rent": float(row.avg_monthly_rent), "avg_monthly_food_utilities": float(row.avg_monthly_food_utilities),
+                    "avg_monthly_transport_fuel": float(row.avg_monthly_transport_fuel), "avg_monthly_emi": float(row.avg_monthly_emi),
+                    "avg_monthly_expenses_total": float(row.avg_monthly_expenses_total),
+                    "avg_safe_monthly_savings": float(row.avg_safe_monthly_savings), "n_samples": int(row.n_samples),
+                } for row in group.itertuples(index=False)
+            },
+            "source": str(first["source"]), "year": int(first["year"]),
+        })
+        city_baselines[city] = values
 
     return {
-        "national_baseline": national,
-        "state_baselines": state_baselines,
-        "city_baselines": city_baselines
+        "provenance": {"label": "Illustrative data" if city_averages["synthetic"].any() else "Dataset data", "synthetic": bool(city_averages["synthetic"].any()), "baseline_file": CITY_AVERAGES_FILE, "seasonality_file": SEASONALITY_FILE},
+        "national_baseline": _aggregate(city_averages),
+        "state_baselines": {state: _aggregate(group) for state, group in city_averages.groupby("state", sort=True)},
+        "city_baselines": city_baselines,
+        "season_factors": {f"{row.city}|{row.platform_type}|{int(row.month)}": float(row.season_factor) for row in seasonality.itertuples(index=False)},
     }

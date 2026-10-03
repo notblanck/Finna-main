@@ -47,11 +47,11 @@ describe("Onboarding Form Validation", () => {
     const tnCities = getCitiesForState("Tamil Nadu")
     assert.ok(tnCities.length > 0, "Tamil Nadu should have cities")
     assert.ok(tnCities.includes("Chennai"), "Tamil Nadu should include Chennai")
-    assert.ok(tnCities.includes("Coimbatore"), "Tamil Nadu should include Coimbatore")
+    assert.deepEqual(tnCities, ["Chennai"], "Fallback cities must match the supplied illustrative dataset")
 
     const mhCities = getCitiesForState("Maharashtra")
     assert.ok(mhCities.includes("Mumbai"), "Maharashtra should include Mumbai")
-    assert.ok(mhCities.includes("Pune"), "Maharashtra should include Pune")
+    assert.deepEqual(mhCities, ["Mumbai"], "Fallback cities must match the supplied illustrative dataset")
 
     assert.equal(hasCityData("Tamil Nadu", "Chennai"), true)
     assert.equal(hasCityData("Tamil Nadu", "NonExistentTown"), false)
@@ -107,7 +107,7 @@ describe("Prediction Engine with Known Cities", () => {
 
     // Baseline & Metadata
     assert.ok(profile.baseline_city_average.weekly_income > 0)
-    assert.ok(profile.model_version.includes("xgb-city"))
+    assert.ok(profile.model_version.includes("city-average"))
     assert.equal(profile.data_source_badge, "synthetic") // Since sample synthetic data is loaded
     assert.ok(profile.suggested_action.length > 10)
   })

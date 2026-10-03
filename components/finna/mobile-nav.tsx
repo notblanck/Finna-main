@@ -86,9 +86,19 @@ export function MobileTopBar({ schemesCount }: MobileNavProps) {
     }
   }
 
+  React.useEffect(() => {
+    const handleCloseOverlays = (e: any) => {
+      if (e.detail?.source !== "mobile-menu") {
+        setIsMenuOpen(false)
+      }
+    }
+    window.addEventListener("finna:close-all-overlays", handleCloseOverlays)
+    return () => window.removeEventListener("finna:close-all-overlays", handleCloseOverlays)
+  }, [])
+
   return (
     <>
-      <div className="md:hidden sticky top-0 z-30 flex h-14 w-full items-center justify-between border-b border-[#e5e5e5] bg-white/95 px-4 backdrop-blur-md">
+      <div className="md:hidden sticky top-0 z-40 flex h-14 w-full items-center justify-between border-b border-[#e5e5e5] bg-white/95 px-4 backdrop-blur-md">
         <Link href="/" className="flex items-center gap-2" aria-label="FINNA Home">
           <FinnaLogoMark className="size-6" />
           <span className="text-lg font-bold tracking-tight text-black">finna</span>
@@ -98,7 +108,10 @@ export function MobileTopBar({ schemesCount }: MobileNavProps) {
           <UserNav compact />
           <button
             type="button"
-            onClick={() => setIsMenuOpen(true)}
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("finna:close-all-overlays", { detail: { source: "mobile-menu" } }))
+              setIsMenuOpen(true)
+            }}
             aria-label="Open navigation menu"
             className="flex size-9 items-center justify-center rounded-full border border-[#e5e5e5] bg-[#fafafa] text-black hover:bg-[#f5f5f5] transition cursor-pointer"
           >
@@ -110,14 +123,14 @@ export function MobileTopBar({ schemesCount }: MobileNavProps) {
       {/* Mobile Slide-over Sheet */}
       <AnimatePresence>
         {isMenuOpen && (
-          <div className="fixed inset-0 z-50 flex justify-end md:hidden">
+          <div className="fixed inset-0 z-[50] flex justify-end md:hidden">
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 bg-black/40 backdrop-blur-xs"
+              className="fixed inset-0 bg-black/40"
             />
 
             {/* Slide-over panel */}
@@ -126,7 +139,7 @@ export function MobileTopBar({ schemesCount }: MobileNavProps) {
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 26, stiffness: 280 }}
-              className="relative w-4/5 max-w-xs h-full bg-white border-l border-[#e5e5e5] shadow-2xl flex flex-col justify-between p-5 z-10"
+              className="relative w-4/5 max-w-xs h-full bg-white border-l border-[#e5e5e5] shadow-2xl flex flex-col justify-between p-5 z-[55]"
             >
               <div className="space-y-6">
                 <div className="flex items-center justify-between border-b border-[#e5e5e5] pb-4">
@@ -251,7 +264,7 @@ export function MobileTopBar({ schemesCount }: MobileNavProps) {
   )
 }
 
-export function MobileBottomTabs({ schemesCount = 3 }: { schemesCount?: number | null }) {
+export function MobileBottomTabs({ schemesCount = 3, activeTab }: { schemesCount?: number | null; activeTab?: string }) {
   const pathname = usePathname()
 
   const tabs = [

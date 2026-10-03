@@ -1,14 +1,23 @@
 # FINNA City-Level Gig Dataset Schema & Training Guide
 
 > **IMPORTANT NOTICE:**
-> The default sample dataset in this directory (`sample_city_gig_data_synthetic.csv`) is **SYNTHETIC & ILLUSTRATIVE DATA**.
-> Every row has `synthetic=true`.
+> The active profile dataset is the three-file FINNA contract: `finna_worker_samples.csv`, `finna_city_averages.csv`, and `finna_seasonality.csv`. These files are **SYNTHETIC & ILLUSTRATIVE DATA** and every row has `synthetic=true`.
 > The FINNA frontend UI explicitly marks all estimates derived from this file as **"Illustrative data"** with an ML Estimate / City Average breakdown.
 > **NEVER present synthetic data as real statistics.**
 
 ---
 
-## 1. Dataset Schema Specification
+## 1. Active Dataset Contract
+
+`python train.py` / `npm run retrain` reads only these named files:
+
+1. `finna_worker_samples.csv` trains the model. Its columns include worker inputs (`month`, `weekly_hours`, `experience_months`, `vehicle_status`) and targets (`weekly_income`, monthly expense fields, and `safe_monthly_savings`).
+2. `finna_city_averages.csv` is the city-average baseline and the only city/state/national fallback source.
+3. `finna_seasonality.csv` supplies the city/platform/month `season_factor` for training and prediction.
+
+Keep each file's column names exactly when replacing it with a real dataset. Metrics from the current files are reported **on synthetic data**.
+
+## 2. Legacy Dataset Schema Specification
 
 To train with real statistics or custom city benchmarks, place one or more `.csv` files into this directory (`ml_service/data/`). The automated loader will validate, aggregate, and train models across all CSV files in this directory.
 
@@ -34,9 +43,9 @@ To train with real statistics or custom city benchmarks, place one or more `.csv
 
 ---
 
-## 2. Dropping In Real Datasets & Retraining
+## 3. Replacing Active Data & Retraining
 
-You can drop real CSV files into `ml_service/data/` (for example, `delhi_gig_workers_2026.csv`, `karnataka_platform_survey.csv`).
+Replace the three active FINNA CSVs in place with real files that preserve their respective column names.
 
 To validate all datasets and retrain the XGBoost models with one command:
 

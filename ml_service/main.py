@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from model import compute_income_prediction, compute_health_score
-from inference import predict_profile, get_baselines, get_model_package
+from inference import predict_profile, get_baselines, get_metrics, get_model_package
 
 app = FastAPI(
     title="FINNA ML Microservice",
@@ -25,6 +25,7 @@ class PredictProfileRequest(BaseModel):
     city: str = Field(default="Chennai", description="City name")
     platform: Optional[str] = Field(default="delivery", description="Primary gig platform/type: delivery, ride_hailing, freelance_other, mixed")
     hours: Optional[float] = Field(default=45.0, description="Typical weekly hours (e.g. 45)")
+    month: Optional[int] = Field(default=None, ge=1, le=12, description="Forecast month (1-12); defaults to the current month")
 
 class PredictIncomeRequest(BaseModel):
     transactions: List[Dict[str, Any]] = Field(default_factory=list)
@@ -44,7 +45,8 @@ def health_check():
         "service": "finna-ml-microservice",
         "version": "1.2.0",
         "model_loaded": pkg is not None,
-        "model_version": pkg.get("version", "v1.2.0") if pkg else "v1.2.0-baseline"
+        "model_version": pkg.get("version", "v2.0.0") if pkg else "v2.0.0-baseline",
+        "evaluation_scope": get_metrics().get("evaluation_scope", "on synthetic data")
     }
 
 @app.post("/predict")
@@ -59,7 +61,8 @@ def predict_city_financial_profile(req: PredictProfileRequest):
             state=req.state,
             city=req.city,
             platform=req.platform or "delivery",
-            hours=req.hours or 45.0
+            hours=req.hours or 45.0,
+            month=req.month,
         )
         return result
     except Exception as e:
@@ -82,7 +85,9 @@ def get_supported_cities():
             state_map[st].append({
                 "city": city_name,
                 "tier": c_info.get("city_tier", "Tier 2"),
-                "cost_of_living_index": c_info.get("cost_of_living_index", 100.0)
+                "cost_of_living_index": c_info.get("cost_of_living_index", 100.0),
+                "synthetic": bool(c_info.get("synthetic", True)),
+                "data_label": "Illustrative data" if c_info.get("synthetic", True) else "Dataset data",
             })
 
         # Sort cities in each state

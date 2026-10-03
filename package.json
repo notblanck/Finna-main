@@ -7,7 +7,7 @@
     "dev": "next dev",
     "lint": "eslint .",
     "start": "next start",
-    "test": "node --test tests/estimate-pipeline.test.mjs",
+    "test": "node --test tests/*.test.mjs",
     "retrain": "python ml_service/train.py"
   },
   "dependencies": {

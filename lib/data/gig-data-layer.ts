@@ -152,8 +152,12 @@ export function getFutureGigData(): FutureGigDataState {
   return activeGigData
 }
 
-export function updateFutureGigData(updater: (prev: FutureGigDataState) => FutureGigDataState): FutureGigDataState {
-  activeGigData = updater(activeGigData)
+export function updateFutureGigData(updater: ((prev: FutureGigDataState) => FutureGigDataState) | Partial<FutureGigDataState>): FutureGigDataState {
+  if (typeof updater === "function") {
+    activeGigData = updater(activeGigData)
+  } else {
+    activeGigData = { ...activeGigData, ...updater }
+  }
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem("finna_gig_override", JSON.stringify(activeGigData))

@@ -1,302 +1,161 @@
-"""
-FINNA Real-Time Financial Profile Predictor
-Loads trained XGBoost artifacts + city baselines, performs average-informed
-blending, quantile/residual intervals, and provides instant fallback.
-"""
+"""Serve profile estimates from XGBoost with supplied city-average fallbacks."""
 
-import os
 import json
 import logging
-from typing import Dict, Any, Optional
+import os
+from datetime import datetime
+from typing import Any, Dict, Optional, Tuple
+
+import joblib
 import numpy as np
 import pandas as pd
-import joblib
 
 logger = logging.getLogger("finna_inference")
-
 ARTIFACTS_DIR = os.path.join(os.path.dirname(__file__), "artifacts")
 MODEL_PATH = os.path.join(ARTIFACTS_DIR, "xgb_models.joblib")
 BASELINES_PATH = os.path.join(ARTIFACTS_DIR, "city_baselines.json")
 METRICS_PATH = os.path.join(ARTIFACTS_DIR, "metrics.json")
-
-# In-memory caches
 _model_package: Optional[Dict[str, Any]] = None
 _city_baselines: Optional[Dict[str, Any]] = None
 _metrics: Optional[Dict[str, Any]] = None
 
+
+def _load_json(path: str) -> Dict[str, Any]:
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as source:
+        return json.load(source)
+
+
 def get_baselines() -> Dict[str, Any]:
     global _city_baselines
     if _city_baselines is None:
-        if os.path.exists(BASELINES_PATH):
-            with open(BASELINES_PATH, "r", encoding="utf-8") as f:
-                _city_baselines = json.load(f)
-        else:
-            _city_baselines = {}
+        _city_baselines = _load_json(BASELINES_PATH)
     return _city_baselines
+
 
 def get_model_package() -> Optional[Dict[str, Any]]:
     global _model_package
-    if _model_package is None:
-        if os.path.exists(MODEL_PATH):
-            try:
-                _model_package = joblib.load(MODEL_PATH)
-                logger.info(f"Loaded FINNA XGBoost models (version: {_model_package.get('version')})")
-            except Exception as e:
-                logger.error(f"Failed to load XGBoost model package: {e}")
+    if _model_package is None and os.path.exists(MODEL_PATH):
+        try:
+            _model_package = joblib.load(MODEL_PATH)
+            if not str(_model_package.get("version", "")).startswith("v2."):
+                logger.warning("Ignoring model artifact built for the retired dataset contract")
                 _model_package = None
+        except Exception as exc:
+            logger.warning("Could not load XGBoost artifact; using city averages: %s", exc)
     return _model_package
+
 
 def get_metrics() -> Dict[str, Any]:
     global _metrics
     if _metrics is None:
-        if os.path.exists(METRICS_PATH):
-            try:
-                with open(METRICS_PATH, "r", encoding="utf-8") as f:
-                    _metrics = json.load(f)
-            except Exception:
-                _metrics = {}
-        else:
-            _metrics = {}
+        _metrics = _load_json(METRICS_PATH)
     return _metrics
 
 
-def predict_profile(
-    state: str,
-    city: str,
-    platform: Optional[str] = "delivery",
-    hours: Optional[float] = 45.0
-) -> Dict[str, Any]:
-    """
-    Predicts financial profile for a given city and worker profile.
-    Blends XGBoost regression prediction with the city-average baseline.
-    Returns estimates, ranges, baseline comparison, and confidence.
-    """
-    state = (state or "Tamil Nadu").strip()
-    city = (city or "Chennai").strip()
-    platform = (platform or "delivery").strip().lower()
-    if platform not in ["delivery", "ride_hailing", "freelance_other", "mixed"]:
-        platform = "delivery"
+def _normalise_platform(platform: Optional[str]) -> str:
+    value = (platform or "delivery").strip().lower()
+    return value if value in {"delivery", "ride_hailing", "freelance"} else "delivery"
+
+
+def _resolve_base(state: str, city: str, platform: str, baselines: Dict[str, Any]) -> Tuple[Dict[str, Any], bool, bool, str]:
+    city_info = baselines.get("city_baselines", {}).get(city)
+    if city_info:
+        return city_info.get("platform_averages", {}).get(platform, city_info), True, False, "city"
+    state_info = baselines.get("state_baselines", {}).get(state)
+    if state_info:
+        return state_info, False, True, "state"
+    return baselines.get("national_baseline", {}), False, True, "national"
+
+
+def predict_profile(state: str, city: str, platform: Optional[str] = "delivery", hours: Optional[float] = 45.0, month: Optional[int] = None) -> Dict[str, Any]:
+    state, city, platform = (state or "Tamil Nadu").strip(), (city or "Chennai").strip(), _normalise_platform(platform)
     try:
-        hours = float(hours) if hours is not None else 45.0
-        hours = max(10.0, min(80.0, hours))
-    except (ValueError, TypeError):
+        hours = max(10.0, min(80.0, float(hours or 45)))
+    except (TypeError, ValueError):
         hours = 45.0
+    try:
+        month = int(month or datetime.now().month)
+        month = month if 1 <= month <= 12 else datetime.now().month
+    except (TypeError, ValueError):
+        month = datetime.now().month
 
-    baselines_data = get_baselines()
-    city_base_map = baselines_data.get("city_baselines", {})
-    state_base_map = baselines_data.get("state_baselines", {})
-    national_base = baselines_data.get("national_baseline", {
-        "avg_gig_weekly_income": 5800.0,
-        "income_std": 750.0,
-        "avg_monthly_rent": 6200.0,
-        "avg_monthly_food_utilities": 4800.0,
-        "avg_transport_fuel": 4200.0,
-        "avg_emi_burden": 2700.0,
-        "cost_of_living_index": 100.0,
-        "safe_savings_capacity": 3200.0,
-    })
+    baselines, metrics = get_baselines(), get_metrics()
+    base, known_city, fallback_used, fallback_level = _resolve_base(state, city, platform, baselines)
+    city_info = baselines.get("city_baselines", {}).get(city, {})
+    state_info = baselines.get("state_baselines", {}).get(state, {})
+    context = city_info or state_info or baselines.get("national_baseline", {})
+    season_factor = float(baselines.get("season_factors", {}).get(f"{city}|{platform}|{month}", 1.0))
+    baseline_weekly = float(base.get("avg_weekly_income", 0)) * season_factor * ((hours / 45.0) ** 0.82)
+    baseline_rent = float(base.get("avg_monthly_rent", 0))
+    baseline_food = float(base.get("avg_monthly_food_utilities", 0))
+    baseline_fuel = float(base.get("avg_monthly_transport_fuel", 0)) * (hours / 45.0)
+    baseline_emi = float(base.get("avg_monthly_emi", 0))
+    baseline_total = float(base.get("avg_monthly_expenses_total", baseline_rent + baseline_food + baseline_fuel + baseline_emi))
+    baseline_other = max(0.0, baseline_total - (baseline_rent + baseline_food + baseline_fuel + baseline_emi))
+    baseline_savings = float(base.get("avg_safe_monthly_savings", 0))
+    baseline_std = float(base.get("income_std", max(baseline_weekly * 0.2, 1)))
+    city_tier = str(context.get("city_tier", "2"))
+    col_index = float(context.get("cost_of_living_index", 100))
+    synthetic = bool(context.get("synthetic", baselines.get("provenance", {}).get("synthetic", True)))
 
-    # Lookup city or fallback
-    is_known_city = city in city_base_map
-    is_known_state = state in state_base_map
-
-    if is_known_city:
-        city_info = city_base_map[city]
-        city_tier = city_info.get("city_tier", "Tier 2")
-        col_index = float(city_info.get("cost_of_living_index", 100.0))
-        data_source = city_info.get("source", "FINNA Regional Gig Economy Dataset")
-        data_year = int(city_info.get("year", 2026))
-        is_synthetic = bool(city_info.get("synthetic", True))
-        baseline_weekly = float(city_info.get("platform_weekly_averages", {}).get(platform, city_info["avg_gig_weekly_income"]))
-        baseline_rent = float(city_info["avg_monthly_rent"])
-        baseline_food = float(city_info["avg_monthly_food_utilities"])
-        baseline_fuel = float(city_info["avg_transport_fuel"])
-        baseline_emi = float(city_info["avg_emi_burden"])
-        baseline_savings = float(city_info["safe_savings_capacity"])
-        baseline_std = float(city_info["income_std"])
-    elif is_known_state:
-        state_info = state_base_map[state]
-        city_tier = "Tier 2"
-        col_index = float(state_info.get("cost_of_living_index", 100.0))
-        data_source = "FINNA State-level Average Benchmark"
-        data_year = 2026
-        is_synthetic = True
-        baseline_weekly = float(state_info["avg_gig_weekly_income"])
-        baseline_rent = float(state_info["avg_monthly_rent"])
-        baseline_food = float(state_info["avg_monthly_food_utilities"])
-        baseline_fuel = float(state_info["avg_transport_fuel"])
-        baseline_emi = float(state_info["avg_emi_burden"])
-        baseline_savings = float(state_info["safe_savings_capacity"])
-        baseline_std = float(state_info["income_std"])
-    else:
-        city_tier = "Tier 2"
-        col_index = float(national_base.get("cost_of_living_index", 100.0))
-        data_source = "FINNA National Average Benchmark"
-        data_year = 2026
-        is_synthetic = True
-        baseline_weekly = float(national_base["avg_gig_weekly_income"])
-        baseline_rent = float(national_base["avg_monthly_rent"])
-        baseline_food = float(national_base["avg_monthly_food_utilities"])
-        baseline_fuel = float(national_base["avg_transport_fuel"])
-        baseline_emi = float(national_base["avg_emi_burden"])
-        baseline_savings = float(national_base["safe_savings_capacity"])
-        baseline_std = float(national_base["income_std"])
-
-    pkg = get_model_package()
-    metrics = get_metrics()
-
-    # Model evaluation predictions
-    xgb_estimates: Dict[str, float] = {}
-    intervals: Dict[str, Dict[str, float]] = {}
-
-    if pkg and is_known_city:
+    xgb_values: Dict[str, float] = {}
+    package = get_model_package()
+    if package and known_city:
         try:
-            encoder = pkg["encoder"]
-            models = pkg["models"]
-            intervals = pkg.get("intervals", {})
-
-            # Prepare single-row DataFrame
-            sample_df = pd.DataFrame([{
-                "state": state,
-                "city": city,
-                "city_tier": city_tier,
-                "platform_type": platform,
-                "cost_of_living_index": col_index,
-                "month_season_factor": 1.0,
-                "typical_weekly_hours": hours
+            sample = pd.DataFrame([{
+                "state": state, "city": city, "city_tier": city_tier, "platform_type": platform,
+                "vehicle_status": "owned_bike_paid", "month": month, "weekly_hours": hours,
+                "experience_months": 12, "cost_of_living_index": col_index, "season_factor": season_factor,
             }])
+            matrix = np.hstack([package["encoder"].transform(sample[package["feature_cols_cat"]]), sample[package["feature_cols_num"]].astype(float).values])
+            xgb_values = {target: float(model.predict(matrix)[0]) for target, model in package["models"].items()}
+        except Exception as exc:
+            logger.warning("Profile inference failed; using city average fallback: %s", exc)
 
-            cat_feat = encoder.transform(sample_df[pkg["feature_cols_cat"]])
-            num_feat = sample_df[pkg["feature_cols_num"]].values
-            X_sample = np.hstack([cat_feat, num_feat])
+    defaults = {
+        "weekly_income": baseline_weekly, "monthly_rent": baseline_rent,
+        "monthly_food_utilities": baseline_food, "monthly_transport_fuel": baseline_fuel,
+        "monthly_emi_or_vehicle_rental": baseline_emi, "monthly_other_expenses": baseline_other,
+        "monthly_expenses_total": baseline_total, "safe_monthly_savings": baseline_savings,
+    }
+    weights: Dict[str, Tuple[float, float]] = {}
+    final: Dict[str, float] = {}
+    for target, baseline_value in defaults.items():
+        details = metrics.get("targets", {}).get(target, {})
+        xgb_weight = float(details.get("blend_weight", {}).get("xgboost", 0.65 if xgb_values else 0.0)) if xgb_values else 0.0
+        base_weight = 1.0 - xgb_weight
+        final[target] = xgb_values.get(target, baseline_value) * xgb_weight + baseline_value * base_weight
+        weights[target] = (xgb_weight, base_weight)
 
-            for target, reg in models.items():
-                pred_val = float(reg.predict(X_sample)[0])
-                xgb_estimates[target] = max(500.0, round(pred_val, 2))
-
-        except Exception as ex:
-            logger.warning(f"Inference error with XGBoost: {ex}. Using baseline values.")
-            xgb_estimates = {}
-
-    # Target-specific blend weights from metrics (or 0.65/0.35 default if XGBoost won)
-    def blend(target_name: str, xgb_val: Optional[float], base_val: float) -> Tuple[float, float, float]:
-        if xgb_val is None:
-            return round(base_val, 2), 0.0, 1.0
-        
-        target_metrics = metrics.get("targets", {}).get(target_name, {})
-        w_xgb = target_metrics.get("blend_weight", {}).get("xgboost", 0.65)
-        w_base = target_metrics.get("blend_weight", {}).get("city_baseline", 0.35)
-
-        # If XGBoost didn't beat baseline on validation, prefer baseline
-        if target_metrics.get("winner") == "Baseline":
-            w_xgb = 0.20
-            w_base = 0.80
-
-        final_val = (xgb_val * w_xgb) + (base_val * w_base)
-        return round(final_val, 2), w_xgb, w_base
-
-    # Compute blended results
-    weekly_income, w_xgb_inc, w_base_inc = blend(
-        "avg_gig_weekly_income",
-        xgb_estimates.get("avg_gig_weekly_income"),
-        baseline_weekly * ((hours / 45.0) ** 0.82)
-    )
-
-    rent, _, _ = blend("avg_monthly_rent", xgb_estimates.get("avg_monthly_rent"), baseline_rent)
-    food_util, _, _ = blend("avg_monthly_food_utilities", xgb_estimates.get("avg_monthly_food_utilities"), baseline_food)
-    fuel, _, _ = blend("avg_transport_fuel", xgb_estimates.get("avg_transport_fuel"), baseline_fuel * (hours / 45.0))
-    emi, _, _ = blend("avg_emi_burden", xgb_estimates.get("avg_emi_burden"), baseline_emi)
-    savings_cap, _, _ = blend("safe_savings_capacity", xgb_estimates.get("safe_savings_capacity"), baseline_savings)
-
-    # Uncertainty Intervals (low / high)
-    # Using residual standard deviations or +/- 18% standard interval
-    inc_std = intervals.get("avg_gig_weekly_income", {}).get("res_std", baseline_std)
-    weekly_low = max(1500.0, round(weekly_income - 1.4 * inc_std, 2))
-    weekly_high = round(weekly_income + 1.5 * inc_std, 2)
-
-    monthly_income = round(weekly_income * 4.33, 2)
-    monthly_low = round(weekly_low * 4.33, 2)
-    monthly_high = round(weekly_high * 4.33, 2)
-
-    rent_std = intervals.get("avg_monthly_rent", {}).get("res_std", rent * 0.12)
-    rent_low = max(2000.0, round(rent - 1.3 * rent_std, 2))
-    rent_high = round(rent + 1.3 * rent_std, 2)
-
-    # Total expenses
-    total_monthly_expenses = round(rent + food_util + fuel + emi, 2)
-
-    # Conservative Safe-to-Spend Today calculation (TRD aligned)
-    # Daily income minus daily fixed obligations and emergency set-aside
-    daily_income = weekly_income / 6.0  # 6-day work week
-    daily_fixed = (rent + emi) / 30.0
-    safe_to_spend_today = max(0.0, round((daily_income * 0.72) - (daily_fixed * 0.6), 2))
-
-    # Suggested Next Action
-    if monthly_income > total_monthly_expenses + 2000:
-        suggested_action = f"Set aside ₹{round(savings_cap):,} monthly to build a 3-month safety cushion (₹{round(rent * 3):,} typical rent cover)."
-    else:
-        suggested_action = f"Prioritize rent (₹{round(rent):,}) and fuel (₹{round(fuel):,}) before discretionary spends in {city}."
-
-    confidence = "high" if is_known_city and pkg else ("medium" if is_known_city else "low")
-    method = "XGBoost + City Average Blend" if (pkg and is_known_city) else ("City Average Baseline" if is_known_city else "State/National Baseline Average")
+    weekly_income = round(final["weekly_income"], 2)
+    inc_std = float(package.get("intervals", {}).get("weekly_income", {}).get("res_std", baseline_std)) if package else baseline_std
+    weekly_low, weekly_high = max(0.0, weekly_income - 1.4 * inc_std), weekly_income + 1.5 * inc_std
+    monthly_income, monthly_low, monthly_high = weekly_income * 4.33, weekly_low * 4.33, weekly_high * 4.33
+    rent = round(final["monthly_rent"], 2)
+    food, fuel, emi = round(final["monthly_food_utilities"], 2), round(final["monthly_transport_fuel"], 2), round(final["monthly_emi_or_vehicle_rental"], 2)
+    total = round(rent + food + fuel + emi + max(0.0, final["monthly_other_expenses"]), 2)
+    safe_to_spend = max(0.0, round((weekly_income / 6 * 0.72) - (((rent + emi) / 30) * 0.6), 2))
+    method = "XGBoost + supplied city average" if xgb_values else "Supplied city average fallback"
+    source = str(context.get("source", "finna_city_averages.csv"))
+    year = int(context.get("year", 2026))
 
     return {
         "status": "success",
-        "inputs": {
-            "state": state,
-            "city": city,
-            "platform": platform,
-            "hours": hours,
-            "city_tier": city_tier,
-            "cost_of_living_index": col_index
-        },
-        "weekly_income": {
-            "expected": weekly_income,
-            "low": weekly_low,
-            "high": weekly_high,
-            "std": round(inc_std, 2)
-        },
-        "monthly_income": {
-            "expected": monthly_income,
-            "low": monthly_low,
-            "high": monthly_high
-        },
-        "typical_rent": {
-            "expected": rent,
-            "low": rent_low,
-            "high": rent_high
-        },
-        "monthly_expenses": {
-            "rent": rent,
-            "food_utilities": food_util,
-            "transport_fuel": fuel,
-            "emi_burden": emi,
-            "total": total_monthly_expenses
-        },
-        "safe_savings_capacity": savings_cap,
-        "safe_to_spend_today": safe_to_spend_today,
-        "baseline_city_average": {
-            "weekly_income": round(baseline_weekly, 2),
-            "monthly_rent": round(baseline_rent, 2),
-            "food_utilities": round(baseline_food, 2),
-            "transport_fuel": round(baseline_fuel, 2),
-            "emi_burden": round(baseline_emi, 2),
-            "safe_savings_capacity": round(baseline_savings, 2)
-        },
-        "blend_weights": {
-            "xgboost": w_xgb_inc,
-            "city_baseline": w_base_inc
-        },
-        "suggested_action": suggested_action,
-        "metadata": {
-            "model_version": pkg.get("version", "v1.2.0") if pkg else "v1.2.0-baseline",
-            "estimation_method": method,
-            "data_year": data_year,
-            "data_source": data_source,
-            "synthetic": is_synthetic,
-            "confidence": confidence,
-            "is_known_city": is_known_city,
-            "fallback_used": not is_known_city or not pkg,
-            "disclaimer": "FINNA provides financial intelligence and education, not regulated financial advice. All figures for non-consented accounts are estimates based on regional statistics."
-        }
+        "inputs": {"state": state, "city": city, "platform": platform, "hours": hours, "month": month, "city_tier": city_tier, "cost_of_living_index": col_index, "season_factor": season_factor},
+        "weekly_income": {"expected": weekly_income, "low": round(weekly_low, 2), "high": round(weekly_high, 2), "std": round(inc_std, 2)},
+        "monthly_income": {"expected": round(monthly_income, 2), "low": round(monthly_low, 2), "high": round(monthly_high, 2)},
+        "typical_rent": {"expected": rent, "low": round(max(0, rent * 0.85), 2), "high": round(rent * 1.15, 2)},
+        "monthly_expenses": {"rent": rent, "food_utilities": food, "transport_fuel": fuel, "emi_burden": emi, "other": round(max(0.0, final["monthly_other_expenses"]), 2), "total": total},
+        "safe_savings_capacity": round(max(0.0, final["safe_monthly_savings"]), 2), "safe_to_spend_today": safe_to_spend,
+        "baseline_city_average": {"weekly_income": round(baseline_weekly, 2), "monthly_rent": round(baseline_rent, 2), "food_utilities": round(baseline_food, 2), "transport_fuel": round(baseline_fuel, 2), "emi_burden": round(baseline_emi, 2), "safe_savings_capacity": round(baseline_savings, 2)},
+        "blend_weights": {"xgboost": weights["weekly_income"][0], "city_baseline": weights["weekly_income"][1]},
+        "suggested_action": "These are illustrative estimates. Replace them with your actual income and expenses when available.",
+        "model_version": package.get("version", "v2.0.0-baseline") if package else "v2.0.0-baseline",
+        "data_source_badge": "synthetic" if synthetic else "city_average",
+        "confidence_level": "medium" if known_city and package else "fallback",
+        "fallback_applied": fallback_used or not bool(xgb_values),
+        "data_source": source, "data_year": year,
+        "metadata": {"model_version": package.get("version", "v2.0.0-baseline") if package else "v2.0.0-baseline", "estimation_method": method, "data_year": year, "data_source": source, "synthetic": synthetic, "confidence": "medium" if known_city else "low", "is_known_city": known_city, "fallback_used": fallback_used or not bool(xgb_values), "fallback_level": fallback_level, "evaluation_scope": "on synthetic data" if synthetic else "on supplied dataset", "disclaimer": "Illustrative data only. These synthetic estimates are not real worker statistics or financial advice."},
     }

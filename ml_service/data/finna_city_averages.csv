@@ -1,0 +1,13 @@
+state,city,city_tier,platform_type,cost_of_living_index,avg_weekly_income,income_std,avg_monthly_rent,avg_monthly_food_utilities,avg_monthly_transport_fuel,avg_monthly_emi,avg_monthly_expenses_total,avg_safe_monthly_savings,n_samples,synthetic,source,year
+Karnataka,Bengaluru,1,delivery,92,4758,910,6151,4804,1616,1591,15629,2844,108,true,Synthetic - aggregated from finna_worker_samples.csv,2026
+Karnataka,Bengaluru,1,freelance,92,4434,1328,5847,4747,1644,1705,15285,2380,108,true,Synthetic - aggregated from finna_worker_samples.csv,2026
+Karnataka,Bengaluru,1,ride_hailing,92,6264,1297,5955,4785,1672,1438,15251,6307,108,true,Synthetic - aggregated from finna_worker_samples.csv,2026
+Maharashtra,Mumbai,1,delivery,100,5123,1093,7761,5507,1755,1446,17845,2790,108,true,Synthetic - aggregated from finna_worker_samples.csv,2026
+Maharashtra,Mumbai,1,freelance,100,4701,1173,8181,5588,1838,1714,18667,1854,108,true,Synthetic - aggregated from finna_worker_samples.csv,2026
+Maharashtra,Mumbai,1,ride_hailing,100,6728,1253,8422,5518,1804,1602,18599,5489,108,true,Synthetic - aggregated from finna_worker_samples.csv,2026
+Tamil Nadu,Chennai,1,delivery,82,4309,843,4293,4144,1361,1423,12536,3255,108,true,Synthetic - aggregated from finna_worker_samples.csv,2026
+Tamil Nadu,Chennai,1,freelance,82,4002,1135,4308,4195,1462,1777,13028,2576,108,true,Synthetic - aggregated from finna_worker_samples.csv,2026
+Tamil Nadu,Chennai,1,ride_hailing,82,5656,1101,4381,4242,1387,1495,12764,6200,108,true,Synthetic - aggregated from finna_worker_samples.csv,2026
+Telangana,Hyderabad,1,delivery,80,4360,952,4111,4175,1480,1417,12520,3418,108,true,Synthetic - aggregated from finna_worker_samples.csv,2026
+Telangana,Hyderabad,1,freelance,80,4019,1122,3815,4159,1473,1404,12117,3011,108,true,Synthetic - aggregated from finna_worker_samples.csv,2026
+Telangana,Hyderabad,1,ride_hailing,80,5831,1143,4219,4149,1435,1635,12805,6638,108,true,Synthetic - aggregated from finna_worker_samples.csv,2026

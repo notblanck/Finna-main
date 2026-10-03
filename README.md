@@ -8,7 +8,7 @@ FINNA is an AI financial co-pilot purpose-built for Indian gig delivery and tran
 
 1. **City-Level Predictive Profiling (Instant Onboarding & "Not now" Flow)**
    - Allows users to explore FINNA immediately without requiring bank logins or Account Aggregator (AA) consent.
-   - Powered by a multi-target **XGBoost regressor** blended with city-level dataset averages across 60 cities and all 36 Indian states & UTs.
+   - Powered by a multi-target **XGBoost regressor** trained on supplied worker samples, blended with city averages for Chennai, Bengaluru, Hyderabad, and Mumbai.
    - Predicts weekly income intervals (low / expected / high), typical rent, food/utilities, vehicle fuel, loan EMI obligations, safe savings capacity, and daily Safe-to-Spend allowances.
    - Includes real-time inline editing marked as "your input" that deterministically re-syncs the entire financial engine, dashboard cards, and Copilot.
 
@@ -40,7 +40,15 @@ FINNA incorporates a Python microservice hosting multi-target XGBoost regression
 
 ### Dataset Schema (`ml_service/data/`)
 
-Any CSV placed into `ml_service/data/` is automatically validated, cleaned, and ingested by `ml_service/data_loader.py`. The required schema is:
+Retraining uses this explicit, replaceable three-file contract. Keep their column names unchanged when replacing the synthetic files with real data:
+
+- `finna_worker_samples.csv`: worker-month samples used to train XGBoost. It includes `month`, `weekly_hours`, `experience_months`, `vehicle_status`, and the `weekly_income` / monthly expense targets.
+- `finna_city_averages.csv`: city × platform baseline used for model comparison and every city/state/national fallback.
+- `finna_seasonality.csv`: city × platform × month `season_factor` used as a training and prediction adjustment.
+
+The current files are **synthetic illustrative data**. The UI labels resulting profiles **Illustrative data**, and `metrics.json` labels every evaluation **on synthetic data**. They must never be cited as real statistics.
+
+The legacy one-file schema below is not used by this retraining command:
 
 | Column | Type | Description | Example |
 | :--- | :--- | :--- | :--- |
@@ -60,7 +68,7 @@ Any CSV placed into `ml_service/data/` is automatically validated, cleaned, and 
 | `year` | int | Year of data collection | `2026` |
 | `synthetic` | boolean | `true` if synthetic/illustrative; `false` if real survey data | `false` |
 
-> **Illustrative Sample Data Note**: When real private survey files are absent, FINNA includes `ml_service/data/sample_city_gig_data_synthetic.csv` (marked `synthetic=True`). The UI transparently presents these numbers under an **"Illustrative data"** badge.
+> **Illustrative data note**: `sample_city_gig_data_synthetic.csv` is ignored by the retraining command. Only the three named FINNA files above are used.
 
 ### One-Command Retraining & Evaluation
 
@@ -75,16 +83,12 @@ This outputs a validation metrics table comparing XGBoost with the city-average 
 
 ```
 ==========================================================================================
-FINNA XGBOOST vs CITY-AVERAGE BASELINE EVALUATION (v1.2.0)
+FINNA XGBOOST vs CITY-AVERAGE BASELINE (ON SYNTHETIC DATA)
 ==========================================================================================
 Target                       | XGB MAE    | Base MAE   | XGB RMSE   | Base RMSE  | Winner    
 ------------------------------------------------------------------------------------------
-avg_gig_weekly_income        | 132.06     | 1583.41    | 165.89     | 1900.98    | XGBoost   
-avg_monthly_rent             | 155.99     | 153.59     | 191.30     | 184.01     | Baseline  
-avg_monthly_food_utilities   | 120.23     | 119.88     | 142.16     | 140.76     | Baseline  
-avg_transport_fuel           | 95.92      | 1236.45    | 122.04     | 1461.25    | XGBoost   
-avg_emi_burden               | 86.37      | 86.14      | 100.84     | 99.92      | Baseline  
-safe_savings_capacity        | 369.81     | 3323.25    | 468.36     | 3942.25    | XGBoost   
+weekly_income                | ...        | ...        | ...        | ...        | ...
+monthly_rent                 | ...        | ...        | ...        | ...        | ...
 ==========================================================================================
 ```
 

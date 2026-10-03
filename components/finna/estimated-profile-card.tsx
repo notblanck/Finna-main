@@ -90,7 +90,9 @@ export function EstimatedProfileCard({ onOpenEditModal }: EstimatedProfileCardPr
             <span className="text-xs text-[#737373]">({profile.inputs.state})</span>
           </div>
           <p className="text-xs text-[#737373] mt-1">
-            Predictive financial profile based on city data. You can customize any number to reflect your finances.
+            {profile.metadata.synthetic
+              ? "Illustrative data — synthetic estimates, not real worker statistics. You can customize any number to reflect your finances."
+              : "Predictive financial profile based on city data. You can customize any number to reflect your finances."}
           </p>
         </div>
 
@@ -130,7 +132,7 @@ export function EstimatedProfileCard({ onOpenEditModal }: EstimatedProfileCardPr
                   </button>
                 </div>
                 <p className="text-[#525252] leading-relaxed">
-                  We train a multi-target <strong>XGBoost regressor</strong> on city-level gig economy datasets, blended with the city's historical dataset average, weighted by out-of-sample validation accuracy.
+                  We train a multi-target <strong>XGBoost regressor</strong> on worker samples, blended with the supplied city-average baseline and adjusted for month seasonality.
                 </p>
                 <div className="rounded-xl bg-[#fafafa] p-2.5 space-y-1 text-[11px] border border-[#f0f0f0]">
                   <p className="text-[#525252]">
@@ -143,11 +145,13 @@ export function EstimatedProfileCard({ onOpenEditModal }: EstimatedProfileCardPr
                     • <strong>City Baseline:</strong> ₹{Math.round(profile.baseline_city_average.weekly_income).toLocaleString("en-IN")}/wk
                   </p>
                   <p className="text-[#525252]">
-                    • <strong>Confidence:</strong> {profile.confidence_level.toUpperCase()}
+                    • <strong>Confidence:</strong> {(profile.confidence_level || profile.metadata.confidence).toUpperCase()}
                   </p>
                 </div>
                 <p className="text-[10px] text-[#737373] italic">
-                  Note: This is an educational estimate based on city data, not your actual or verified income. Connect bank sync anytime for real-time accuracy.
+                  {profile.metadata.synthetic
+                    ? "Illustrative data only: this synthetic estimate is not a real statistic, actual income, or verified income."
+                    : "This is an educational estimate, not your actual or verified income. Connect bank sync anytime for real-time accuracy."}
                 </p>
               </div>
             )}

@@ -37,6 +37,15 @@
   --sidebar-accent-foreground: oklch(0 0 0);
   --sidebar-border: oklch(0.90 0 0);
   --sidebar-ring: oklch(0 0 0);
+
+  /* Single FINNA Z-Index Hierarchy Scale */
+  --z-content: 0;
+  --z-nav: 40;
+  --z-bottom-tabs: 40;
+  --z-backdrop: 50;
+  --z-copilot: 60;
+  --z-toast: 70;
+  --z-cookie-banner: 80;
 }
 
 @theme inline {
@@ -94,6 +103,15 @@
 }
 
 @layer utilities {
+  /* Unified Z-Index Scale Utilities */
+  .z-content { z-index: var(--z-content); }
+  .z-nav { z-index: var(--z-nav); }
+  .z-bottom-tabs { z-index: var(--z-bottom-tabs); }
+  .z-backdrop { z-index: var(--z-backdrop); }
+  .z-copilot { z-index: var(--z-copilot); }
+  .z-toast { z-index: var(--z-toast); }
+  .z-cookie-banner { z-index: var(--z-cookie-banner); }
+
   .font-display {
     font-family: var(--font-display);
   }

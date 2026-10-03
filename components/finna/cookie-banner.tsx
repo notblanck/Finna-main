@@ -28,6 +28,7 @@ export function getCookieConsent(): CookiePreferences | null {
 export function CookieBanner() {
   const [isOpen, setIsOpen] = React.useState(false)
   const [isCustomizeOpen, setIsCustomizeOpen] = React.useState(false)
+  const [isCopilotOpen, setIsCopilotOpen] = React.useState(false)
   const [preferences, setPreferences] = React.useState<{
     analytics: boolean
     functionality: boolean
@@ -46,9 +47,34 @@ export function CookieBanner() {
     }
   }, [])
 
+  // Listen for Copilot state changes and close-all-overlays events
+  React.useEffect(() => {
+    const handleCopilotState = (e: any) => {
+      const open = !!e.detail?.isOpen
+      setIsCopilotOpen(open)
+      if (open) {
+        setIsCustomizeOpen(false)
+      }
+    }
+
+    const handleCloseOverlays = (e: any) => {
+      if (e.detail?.source !== "cookie-customize") {
+        setIsCustomizeOpen(false)
+      }
+    }
+
+    window.addEventListener("finna:copilot-state", handleCopilotState)
+    window.addEventListener("finna:close-all-overlays", handleCloseOverlays)
+    return () => {
+      window.removeEventListener("finna:copilot-state", handleCopilotState)
+      window.removeEventListener("finna:close-all-overlays", handleCloseOverlays)
+    }
+  }, [])
+
   // Listen for global open requests (from footer or mobile menu)
   React.useEffect(() => {
     const handleOpen = () => {
+      window.dispatchEvent(new CustomEvent("finna:close-all-overlays", { detail: { source: "cookie-customize" } }))
       const existing = getCookieConsent()
       if (existing) {
         setPreferences({
@@ -110,11 +136,11 @@ export function CookieBanner() {
     })
   }
 
-  if (!isOpen) return null
+  if (!isOpen || isCopilotOpen) return null
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 pointer-events-none flex items-end sm:items-end sm:p-6 p-3">
+      <div className="fixed inset-0 z-[80] pointer-events-none flex items-end sm:items-end sm:p-6 p-3">
         {/* Backdrop for customize modal */}
         {isCustomizeOpen && (
           <motion.div
@@ -122,7 +148,7 @@ export function CookieBanner() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsCustomizeOpen(false)}
-            className="fixed inset-0 bg-black/40 backdrop-blur-xs pointer-events-auto"
+            className="fixed inset-0 bg-black/40 pointer-events-auto"
           />
         )}
 
