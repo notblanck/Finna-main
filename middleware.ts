@@ -40,6 +40,7 @@ export async function middleware(request: NextRequest) {
   // Helper to copy all supabase cookies to any redirect response
   function redirectWithCookies(targetUrl: URL | string, status = 307) {
     const res = NextResponse.redirect(targetUrl, status)
+    res.headers.set("Permissions-Policy", "microphone=*")
     supabaseResponse.cookies.getAll().forEach((cookie) => {
       res.cookies.set(cookie.name, cookie.value, {
         path: "/",
@@ -150,6 +151,7 @@ export async function middleware(request: NextRequest) {
     return redirectWithCookies(url)
   }
 
+  supabaseResponse.headers.set("Permissions-Policy", "microphone=*")
   return supabaseResponse
 }
 

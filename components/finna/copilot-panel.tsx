@@ -440,7 +440,63 @@ export function CopilotPanel() {
     }
   }
 
-  // Capacitor Native Speech Recognition
+  // Proactively request and verify microphone permission via getUserMedia.
+  // CRITICAL FOR MOBILE PHONES: On mobile Chrome, Safari, and WebViews, calling SpeechRecognition.start()
+  // directly does not invoke the native OS/browser permission prompt if not already granted,
+  // causing an immediate 'not-allowed' rejection. Calling getUserMedia in response to user tap
+  // triggers the native prompt. Once granted, tracks are stopped immediately to release hardware locks.
+  const ensureMicrophonePermission = async (): Promise<boolean> => {
+    if (typeof window === "undefined") return false
+
+    // 1. Check Permissions API if supported (avoid prompting if user explicitly blocked)
+    if (typeof navigator !== "undefined" && navigator.permissions?.query) {
+      try {
+        const permStatus = await navigator.permissions.query({ name: "microphone" as PermissionName })
+        if (permStatus.state === "denied") {
+          setVoiceNotice(
+            "Microphone access is blocked. Tap the lock/tune icon in your address bar (or Android App Settings) and change Microphone to 'Allow'."
+          )
+          return false
+        }
+      } catch {
+        // Permissions query for 'microphone' is not supported in some browsers (e.g. Safari iOS)
+      }
+    }
+
+    // 2. Trigger native browser & OS permission dialog via getUserMedia
+    if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        })
+        // CRITICAL FOR ANDROID: Stop all media tracks immediately.
+        // Android's AudioRecord HAL permits only one audio capture client.
+        // Stopping tracks immediately releases the audio device for SpeechRecognition.
+        stream.getTracks().forEach((track) => track.stop())
+        return true
+      } catch (err: any) {
+        console.warn("Microphone getUserMedia prompt error:", err)
+        if (err?.name === "NotAllowedError" || err?.name === "PermissionDeniedError") {
+          setVoiceNotice(
+            "Microphone permission was denied. Tap 'Allow' when your browser asks for microphone access, or enable it in browser settings."
+          )
+        } else if (err?.name === "NotFoundError" || err?.name === "DevicesNotFoundError") {
+          setVoiceNotice("No microphone found on this device.")
+        } else {
+          setVoiceNotice("Could not access microphone. Please check your phone settings.")
+        }
+        return false
+      }
+    }
+
+    return true
+  }
+
+  // Capacitor Native Speech Recognition (supports Capacitor 3, 4, 5, 6)
   const startCapacitorSpeech = async () => {
     try {
       const Capacitor = (window as any).Capacitor
@@ -449,26 +505,72 @@ export function CopilotPanel() {
         throw new Error("SpeechRecognition plugin not found on Capacitor")
       }
 
-      const perm = await SpeechPlugin.hasPermission()
-      if (!perm?.permission) {
-        const req = await SpeechPlugin.requestPermission()
-        if (!req?.permission) {
-          setVoiceNotice("Microphone permission was denied. Please enable it in Android app settings.")
-          return
+      // Check device availability if supported
+      if (typeof SpeechPlugin.available === "function") {
+        const { available } = await SpeechPlugin.available()
+        if (!available) {
+          throw new Error("Speech recognition service not available on device")
         }
+      }
+
+      // Check and request permissions supporting both modern and legacy Capacitor APIs
+      let hasAudioPerm = false
+      if (typeof SpeechPlugin.checkPermissions === "function") {
+        const status = await SpeechPlugin.checkPermissions()
+        if (status?.speechRecognition === "granted" || status?.microphone === "granted") {
+          hasAudioPerm = true
+        } else if (typeof SpeechPlugin.requestPermissions === "function") {
+          const req = await SpeechPlugin.requestPermissions()
+          if (req?.speechRecognition === "granted" || req?.microphone === "granted") {
+            hasAudioPerm = true
+          }
+        }
+      } else if (typeof SpeechPlugin.hasPermission === "function") {
+        const perm = await SpeechPlugin.hasPermission()
+        if (perm?.permission) {
+          hasAudioPerm = true
+        } else if (typeof SpeechPlugin.requestPermission === "function") {
+          const req = await SpeechPlugin.requestPermission()
+          if (req?.permission) {
+            hasAudioPerm = true
+          }
+        }
+      } else {
+        hasAudioPerm = true
+      }
+
+      if (!hasAudioPerm) {
+        setVoiceNotice(
+          "Microphone permission was denied. Tap App Info > Permissions > Microphone in Android Settings to enable."
+        )
+        return
       }
 
       setIsListening(true)
       setAvatarState("listening")
       setVoiceNotice(null)
 
+      let listenerCleanup: (() => void) | null = null
+      if (typeof SpeechPlugin.addListener === "function") {
+        const handle = await SpeechPlugin.addListener("partialResults", (data: any) => {
+          if (data?.matches?.length) {
+            setInput(data.matches[0])
+          }
+        })
+        listenerCleanup = () => {
+          if (typeof handle?.remove === "function") handle.remove()
+        }
+      }
+
       const result = await SpeechPlugin.start({
         language: language === "ta" ? "ta-IN" : language === "hi" ? "hi-IN" : "en-IN",
         maxResults: 1,
         prompt: "Speak to FINNA Copilot...",
-        partialResults: false,
+        partialResults: true,
         popup: false,
       })
+
+      if (listenerCleanup) listenerCleanup()
 
       if (result?.matches?.length) {
         const spoken = result.matches[0]
@@ -482,26 +584,35 @@ export function CopilotPanel() {
       }
     } catch (err: any) {
       console.warn("Capacitor speech recognition notice, trying browser fallback:", err)
-      startWebSpeech()
+      await startWebSpeech()
     }
   }
 
-  // Web Speech API
-  const startWebSpeech = () => {
+  // Web Speech API with real-time feedback & mobile resilience
+  const startWebSpeech = async () => {
     try {
       const SpeechRec =
         (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+
       if (!SpeechRec) {
-        setVoiceNotice("Speech recognition is not available in this browser. Please type your query below.")
-        setTimeout(() => setVoiceNotice(null), 4000)
+        setVoiceNotice(
+          "Speech recognition is not supported in this browser view. Please use Chrome on your phone, or type below."
+        )
         return
       }
+
+      // Step 1: Ensure microphone permission is granted (triggers prompt if not yet allowed)
+      const hasPerm = await ensureMicrophonePermission()
+      if (!hasPerm) return
+
+      // Small delay on mobile to ensure OS audio device is freed by getUserMedia
+      await new Promise((resolve) => setTimeout(resolve, 100))
 
       const recognition = new SpeechRec()
       recognitionRef.current = recognition
       recognition.lang = language === "ta" ? "ta-IN" : language === "hi" ? "hi-IN" : "en-IN"
       recognition.continuous = false
-      recognition.interimResults = false
+      recognition.interimResults = true
 
       recognition.onstart = () => {
         setIsListening(true)
@@ -510,12 +621,27 @@ export function CopilotPanel() {
       }
 
       recognition.onresult = (event: any) => {
-        const transcript = event.results[0]?.[0]?.transcript
-        if (transcript) {
-          setInput(transcript)
+        let interimTranscript = ""
+        let finalTranscript = ""
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const item = event.results[i]
+          if (item?.isFinal) {
+            finalTranscript += item[0]?.transcript || ""
+          } else {
+            interimTranscript += item[0]?.transcript || ""
+          }
+        }
+
+        const currentText = (finalTranscript || interimTranscript).trim()
+        if (currentText) {
+          setInput(currentText)
+        }
+
+        if (finalTranscript.trim()) {
           setIsListening(false)
           setAvatarState("thinking")
-          handleSend(transcript)
+          handleSend(finalTranscript.trim())
         }
       }
 
@@ -526,11 +652,16 @@ export function CopilotPanel() {
         if (event.error === "no-speech") {
           setVoiceNotice("No voice detected. Please speak closer to the microphone or type below.")
         } else if (event.error === "not-allowed") {
-          setVoiceNotice("Microphone permission was denied. Please allow microphone access or type below.")
+          setVoiceNotice(
+            "Microphone permission was not allowed. Tap the lock/tune icon in your address bar to allow Microphone."
+          )
+        } else if (event.error === "network") {
+          setVoiceNotice("Speech recognition network error. Please check your internet connection or type below.")
+        } else if (event.error === "audio-capture") {
+          setVoiceNotice("Microphone is currently unavailable. Ensure no other recording app is open.")
         } else {
-          setVoiceNotice("Speech recognition interrupted. You can type your query.")
+          setVoiceNotice("Speech recognition interrupted. You can type your query below.")
         }
-        setTimeout(() => setVoiceNotice(null), 4500)
       }
 
       recognition.onend = () => {
@@ -541,34 +672,43 @@ export function CopilotPanel() {
       }
 
       recognition.start()
-    } catch (err) {
+    } catch (err: any) {
       console.error("Speech Recognition failed:", err)
       setIsListening(false)
       setAvatarState("idle")
-      setVoiceNotice("Could not access microphone. Please type your question directly.")
-      setTimeout(() => setVoiceNotice(null), 4000)
+      setVoiceNotice("Could not access microphone. Tap the lock icon in your address bar to allow Microphone.")
     }
   }
 
   // Toggle voice recognition
-  const toggleListening = () => {
+  const toggleListening = async () => {
     if (isListening) {
       if (recognitionRef.current) {
-        recognitionRef.current.stop()
+        try {
+          recognitionRef.current.stop()
+        } catch {}
+      }
+      const Capacitor = typeof window !== "undefined" ? (window as any).Capacitor : undefined
+      if (Capacitor?.Plugins?.SpeechRecognition?.stop) {
+        try {
+          await Capacitor.Plugins.SpeechRecognition.stop()
+        } catch {}
       }
       setIsListening(false)
       setAvatarState("idle")
       return
     }
 
+    setVoiceNotice(null)
+
     const isCapacitorNative =
       typeof window !== "undefined" &&
       (window as any).Capacitor?.isNativePlatform?.() === true
 
     if (isCapacitorNative && (window as any).Capacitor?.Plugins?.SpeechRecognition) {
-      startCapacitorSpeech()
+      await startCapacitorSpeech()
     } else {
-      startWebSpeech()
+      await startWebSpeech()
     }
   }
 
@@ -1129,6 +1269,22 @@ export function CopilotPanel() {
                   paddingBottom: "max(12px, env(safe-area-inset-bottom, 12px))",
                 }}
               >
+                {voiceNotice && (
+                  <div className="flex items-start justify-between gap-2 p-2.5 mb-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 text-xs shadow-xs animate-in fade-in slide-in-from-top-1">
+                    <div className="flex items-start gap-2">
+                      <MicOff className="size-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+                      <span className="leading-snug">{voiceNotice}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setVoiceNotice(null)}
+                      className="p-0.5 hover:bg-amber-100 dark:hover:bg-amber-900/60 rounded text-amber-700 dark:text-amber-300 cursor-pointer shrink-0"
+                      title="Dismiss notice"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                )}
                 <div className="rounded-2xl border border-[#e5e5e5] dark:border-[#262626] bg-[#f9f9f9] dark:bg-[#181818] p-2.5 focus-within:border-black dark:focus-within:border-white focus-within:bg-white dark:focus-within:bg-[#141414] transition-all shadow-xs space-y-2">
                   {/* Top Textarea */}
                   <textarea
@@ -1163,7 +1319,8 @@ export function CopilotPanel() {
                         type="button"
                         onClick={toggleListening}
                         disabled={isLoading}
-                        title={isListening ? "Listening... click to stop" : "Speak to FINNA Copilot"}
+                        aria-label={isListening ? "Stop voice listening" : "Speak to FINNA Copilot"}
+                        title={isListening ? "Listening... click to stop" : "Speak to FINNA Copilot (tap for microphone)"}
                         className={`size-8 rounded-xl flex items-center justify-center transition cursor-pointer ${
                           isListening
                             ? "bg-red-600 text-white animate-pulse shadow-md"
