@@ -18,7 +18,8 @@ import {
   SlidersHorizontal,
   LogOut,
   ChevronRight,
-  Loader2
+  Loader2,
+  Edit2
 } from "lucide-react"
 import { FinnaLogo, FinnaLogoMark } from "./logo"
 import { UserNav } from "./user-nav"
@@ -145,6 +146,23 @@ export function MobileTopBar({ schemesCount }: MobileNavProps) {
 
                 {/* Legal & App Links */}
                 <div className="space-y-1 text-sm font-medium">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMenuOpen(false)
+                      if (typeof window !== "undefined") {
+                        window.dispatchEvent(new CustomEvent("finna_open_edit_details"))
+                      }
+                    }}
+                    className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-[#f5f5f5] text-black transition text-left cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Edit2 className="size-4 text-black" />
+                      <span className="font-semibold">Change my details</span>
+                    </div>
+                    <ChevronRight className="size-4 text-[#a3a3a3]" />
+                  </button>
+
                   <Link
                     href="/terms"
                     onClick={() => setIsMenuOpen(false)}

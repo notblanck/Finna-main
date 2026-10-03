@@ -189,6 +189,13 @@ export function generateCopilotAnswer(
   const calc: FinnaCalculationResult = calculateFinnaFinancialState(customMaster, customGig)
   const benefits: BenefitsEvaluationResponse = evaluateArunBenefits(customMaster?.profile)
 
+  const master = customMaster || calc.arun
+  const rawName = (customMaster?.profile?.fullName || (master as any)?.profile?.fullName || "Friend").trim()
+  const userName = rawName.split(" ")[0] || "Friend"
+  const cityName = customMaster?.profile?.city || (master as any)?.profile?.city || "your city"
+  const isEstimated = !customMaster?.bankAccounts?.some((a) => a.lastSynced?.includes("Setu AA"))
+  const estimateTag = isEstimated ? ` *(based on estimates for ${cityName})*` : ""
+
   switch (intent) {
     // -------------------------------------------------------------
     // 1. Can I pay my EMI?
@@ -212,32 +219,32 @@ export function generateCopilotAnswer(
 
       if (language === "ta") {
         explanationText = canPay
-          ? `ஆம் அருண், உங்களால் உங்கள் ₹${monthlyEmi.toLocaleString("en-IN")} பைக் இஎம்ஐ-யை (மாதம் ${dueDay}-ஆம் தேதி) எளிதாக செலுத்த முடியும்.\n\n` +
+          ? `ஆம் ${userName}, உங்களால் உங்கள் ₹${monthlyEmi.toLocaleString("en-IN")} பைக் இஎம்ஐ-யை (மாதம் ${dueDay}-ஆம் தேதி) எளிதாக செலுத்த முடியும்.${estimateTag}\n\n` +
             `• உங்கள் மொத்த வங்கி இருப்பு: **₹${balance.toLocaleString("en-IN")}**\n` +
             `• இஎம்ஐ கழித்த பின் மீதம்: **₹${surplusAfterEmi.toLocaleString("en-IN")}**\n` +
             `• கடன்-வருமான விகிதம் (DTI): **${dtiRatioPct}%** (${status})\n\n` +
             `உங்கள் இருப்பு தவணைத் தொகையை விட போதுமானதாக இருப்பதால் உங்கள் வங்கி கணக்கில் பைக் தவணை பவுன்ஸ் ஆகாது.`
-          : `கவனம் அருண்! உங்கள் வங்கி இருப்பு (₹${balance.toLocaleString("en-IN")}) உங்கள் ₹${monthlyEmi.toLocaleString("en-IN")} இஎம்ஐ-யை செலுத்த போதாது.`
-        audioText = `ஆம் அருண், உங்கள் வங்கி இருப்பு ₹${balance} உள்ளதால் ₹${monthlyEmi} பைக் இஎம்ஐயை எளிதாக செலுத்த முடியும்.`
+          : `கவனம் ${userName}! உங்கள் வங்கி இருப்பு (₹${balance.toLocaleString("en-IN")}) உங்கள் ₹${monthlyEmi.toLocaleString("en-IN")} இஎம்ஐ-யை செலுத்த போதாது.`
+        audioText = `ஆம் ${userName}, உங்கள் வங்கி இருப்பு ₹${balance} உள்ளதால் ₹${monthlyEmi} பைக் இஎம்ஐயை எளிதாக செலுத்த முடியும்.`
       } else if (language === "hi") {
         explanationText = canPay
-          ? `हाँ अरुण, आप अपनी ₹${monthlyEmi.toLocaleString("en-IN")} की बाइक ईएमआई (हर महीने की ${dueDay} तारीख) आराम से भर सकते हैं।\n\n` +
+          ? `हाँ ${userName}, आप अपनी ₹${monthlyEmi.toLocaleString("en-IN")} की बाइक ईएमआई (हर महीने की ${dueDay} तारीख) आराम से भर सकते हैं।${estimateTag}\n\n` +
             `• कुल बैंक बैलेंस: **₹${balance.toLocaleString("en-IN")}**\n` +
             `• ईएमआई के बाद शेष राशि: **₹${surplusAfterEmi.toLocaleString("en-IN")}**\n` +
             `• ऋण-आय अनुपात (DTI): **${dtiRatioPct}%** (${status})\n\n` +
             `आपका बैंक बैलेंस ईएमआई राशि से काफी अधिक है, इसलिए आपकी क़िस्त बिना किसी रुकावट के कट जाएगी।`
-          : `सावधान अरुण! आपका बैंक बैलेंस (₹${balance.toLocaleString("en-IN")}) आपकी ₹${monthlyEmi.toLocaleString("en-IN")} की ईएमआई के लिए कम है।`
-        audioText = `हाँ अरुण, आपके खाते में ₹${balance} हैं, इसलिए ₹${monthlyEmi} की ईएमआई आसानी से कट जाएगी।`
+          : `सावधान ${userName}! आपका बैंक बैलेंस (₹${balance.toLocaleString("en-IN")}) आपकी ₹${monthlyEmi.toLocaleString("en-IN")} की ईएमआई के लिए कम है।`
+        audioText = `हाँ ${userName}, आपके खाते में ₹${balance} हैं, इसलिए ₹${monthlyEmi} की ईएमआई आसानी से कट जाएगी।`
       } else {
         explanationText = canPay
-          ? `**Yes, you can comfortably pay your EMI.**\n\n` +
+          ? `**Yes, you can comfortably pay your EMI.**${estimateTag}\n\n` +
             `• **Monthly EMI Amount:** ₹${monthlyEmi.toLocaleString("en-IN")} (Due on the ${dueDay}th of every month)\n` +
-            `• **Current Total Bank Balance:** ₹${balance.toLocaleString("en-IN")} (SBI + HDFC)\n` +
+            `• **Current Total Bank Balance / Reserve:** ₹${balance.toLocaleString("en-IN")}\n` +
             `• **Surplus After Payment:** ₹${surplusAfterEmi.toLocaleString("en-IN")}\n` +
             `• **Debt-to-Income (DTI) Ratio:** ${dtiRatioPct}% (Status: **${status}**)\n\n` +
-            `Because your available bank balance is **${Math.round((balance / monthlyEmi) * 10) / 10}x** the EMI obligation, there is zero risk of an ECS bounce. Your vehicle loan remains in good standing.`
+            `Because your available balance is **${Math.round((balance / monthlyEmi) * 10) / 10}x** the EMI obligation, there is zero risk of an ECS bounce. Your vehicle loan remains in good standing.`
           : `**Warning:** Your current bank balance of ₹${balance.toLocaleString("en-IN")} is insufficient to cover your upcoming EMI of ₹${monthlyEmi.toLocaleString("en-IN")}.`
-        audioText = `Yes Arun, you can comfortably pay your ₹${monthlyEmi} EMI. Your total bank balance is ₹${balance}, leaving a surplus of ₹${surplusAfterEmi}.`
+        audioText = `Yes ${userName}, you can comfortably pay your ₹${monthlyEmi} EMI. Your balance is ₹${balance}, leaving a surplus of ₹${surplusAfterEmi}.`
       }
 
       return {
@@ -275,29 +282,29 @@ export function generateCopilotAnswer(
       let audioText = ""
 
       if (language === "ta") {
-        explanationText = `**ஆம் அருண், உங்கள் வீட்டு வாடகையை உங்களால் செலுத்த முடியும்.**\n\n` +
+        explanationText = `**ஆம் ${userName}, உங்கள் வீட்டு வாடகையை உங்களால் செலுத்த முடியும்.**${estimateTag}\n\n` +
           `• மாத வாடகை: **₹${monthlyRent.toLocaleString("en-IN")}** (ஒவ்வொரு மாதமும் ${dueDay}-ஆம் தேதி)\n` +
           `• வங்கி இருப்பு: **₹${balance.toLocaleString("en-IN")}**\n` +
           `• வாடகை கழித்த பின் மீதம்: **₹${surplusAfterRent.toLocaleString("en-IN")}**\n` +
           `• வாடகை-வருமான விகிதம்: **${rentToIncomeRatioPct}%** (${status})\n\n` +
           `உங்கள் வருமானத்தில் வாடகை 20% மட்டுமே உள்ளதால் உங்கள் வீட்டுச் செலவு ஆரோக்கியமான வரம்பிற்குள் உள்ளது.`
-        audioText = `ஆம் அருண், உங்கள் ₹${monthlyRent} வாடகையை செலுத்த முடியும். மீதம் ₹${surplusAfterRent} இருக்கும்.`
+        audioText = `ஆம் ${userName}, உங்கள் ₹${monthlyRent} வாடகையை செலுத்த முடியும். மீதம் ₹${surplusAfterRent} இருக்கும்.`
       } else if (language === "hi") {
-        explanationText = `**हाँ अरुण, आप अपने घर का किराया आराम से दे सकते हैं।**\n\n` +
+        explanationText = `**हाँ ${userName}, आप अपने घर का किराया आराम से दे सकते हैं।**${estimateTag}\n\n` +
           `• मासिक किराया: **₹${monthlyRent.toLocaleString("en-IN")}** (हर महीने की ${dueDay} तारीख को देय)\n` +
           `• वर्तमान बैंक बैलेंस: **₹${balance.toLocaleString("en-IN")}**\n` +
           `• किराया देने के बाद शेष: **₹${surplusAfterRent.toLocaleString("en-IN")}**\n` +
           `• किराया-आय अनुपात: **${rentToIncomeRatioPct}%** (${status})\n\n` +
           `किराया आपकी कुल आय का केवल ${rentToIncomeRatioPct}% है, जो 25% की अनुशंसित सीमा के भीतर है।`
-        audioText = `हाँ अरुण, आप ₹${monthlyRent} किराया दे सकते हैं। आपके पास ₹${surplusAfterRent} बचेंगे।`
+        audioText = `हाँ ${userName}, आप ₹${monthlyRent} किराया दे सकते हैं। आपके पास ₹${surplusAfterRent} बचेंगे।`
       } else {
-        explanationText = `**Yes, you can easily pay your rent.**\n\n` +
-          `• **Monthly Rent:** ₹${monthlyRent.toLocaleString("en-IN")} (Due on the ${dueDay}th of each month to your Velachery landlord)\n` +
-          `• **Current Total Bank Balance:** ₹${balance.toLocaleString("en-IN")}\n` +
+        explanationText = `**Yes ${userName}, you can easily pay your rent.**${estimateTag}\n\n` +
+          `• **Monthly Rent:** ₹${monthlyRent.toLocaleString("en-IN")} (Due on the ${dueDay}th of each month in ${cityName})\n` +
+          `• **Current Total Bank Balance / Reserve:** ₹${balance.toLocaleString("en-IN")}\n` +
           `• **Remaining Balance After Rent:** ₹${surplusAfterRent.toLocaleString("en-IN")}\n` +
           `• **Rent-to-Income Ratio:** ${rentToIncomeRatioPct}% (Status: **${status}**)\n\n` +
-          `Financial guidelines recommend keeping housing expenses under 25% of net income. At ${rentToIncomeRatioPct}%, your rent obligation is within safe limits and your bank buffer comfortably protects you.`
-        audioText = `Yes Arun, you can pay your rent of ₹${monthlyRent}. You have ₹${balance} in bank, leaving a surplus of ₹${surplusAfterRent}.`
+          `Financial guidelines recommend keeping housing expenses under 25% of net income. At ${rentToIncomeRatioPct}%, your rent obligation is within safe limits and your buffer comfortably protects you.`
+        audioText = `Yes ${userName}, you can pay your rent of ₹${monthlyRent}. You have ₹${balance} in reserves, leaving a surplus of ₹${surplusAfterRent}.`
       }
 
       return {
@@ -650,9 +657,9 @@ export function generateCopilotAnswer(
       const score = calc.healthScore.totalScore
 
       const explanationText =
-        `Hello Arun! I am FINNA, your intelligent financial co-pilot powered by your verified bank accounts (Setu AA) and gig platform telemetry.\n\n` +
-        `• **Current Bank Balance:** ₹${balance.toLocaleString("en-IN")}\n` +
-        `• **Monthly Net Earnings:** ₹${netIncome.toLocaleString("en-IN")} (Swiggy + Uber)\n` +
+        `Hello ${userName}! I am FINNA, your intelligent financial co-pilot ${isEstimated ? `(based on estimates for ${cityName})` : "powered by your verified bank accounts (Setu AA) and gig platform telemetry"}.\n\n` +
+        `• **Current Balance / Reserve:** ₹${balance.toLocaleString("en-IN")}\n` +
+        `• **Monthly Net Earnings Estimate:** ₹${netIncome.toLocaleString("en-IN")} (${cityName} benchmarks)\n` +
         `• **Financial Health Score:** ${score}/100 (${calc.healthScore.band})\n` +
         `• **Safe-to-Spend Today:** ₹${calc.safeToSpend.safeToSpendToday.toLocaleString("en-IN")}\n\n` +
         `You can ask me any of your 7 core financial questions:\n` +
@@ -670,7 +677,7 @@ export function generateCopilotAnswer(
         language,
         structuredResult: { totalBankBalance: balance, netIncome, score },
         explanationText,
-        audioText: `Hello Arun, your bank balance is ₹${balance} and your monthly income is ₹${netIncome}. How can I assist your finances today?`,
+        audioText: `Hello ${userName}, your safe-to-spend limit today is ₹${calc.safeToSpend.safeToSpendToday} and your monthly income is ₹${netIncome} based on estimates for ${cityName}. How can I assist your finances today?`,
         mathematicalReasoning: {
           formula: "SummaryState = Combine(AA_Data, Gig_Telemetry)",
           inputs: { Balance: balance, Income: netIncome, Score: score },

@@ -6,7 +6,9 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "eslint .",
-    "start": "next start"
+    "start": "next start",
+    "test": "node --test tests/estimate-pipeline.test.mjs",
+    "retrain": "python ml_service/train.py"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

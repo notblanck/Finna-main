@@ -21,6 +21,9 @@ import RetrievingPage from "@/app/retrieving/page"
 import { FinnaLogoMark } from "./logo"
 
 import { MobileTopBar, MobileBottomTabs } from "./mobile-nav"
+import { CityOnboardingModal } from "./city-onboarding-modal"
+import { EstimatedProfileCard } from "./estimated-profile-card"
+import { getUserDisplayName, isEstimateModeActive, getEstimatedFinancialProfile } from "@/lib/data/estimate-store"
 
 const fade = { initial: { opacity: 0, y: 16 }, animate: { opacity: 1, y: 0 }, exit: { opacity: 0, y: -12 }, transition: { duration: .35 } }
 
@@ -46,6 +49,15 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
   const [navSchemesCount, setNavSchemesCount] = useState<number | null>(null)
   const [navHealthScore, setNavHealthScore] = useState<number | null>(null)
   const [navUser, setNavUser] = useState<any>(null)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+
+  useEffect(() => {
+    const handleOpenEdit = () => setIsEditModalOpen(true)
+    if (typeof window !== "undefined") {
+      window.addEventListener("finna_open_edit_details", handleOpenEdit)
+      return () => window.removeEventListener("finna_open_edit_details", handleOpenEdit)
+    }
+  }, [])
 
   useEffect(() => {
     async function loadNavData() {
@@ -184,10 +196,24 @@ function Shell({ children, back = false, onBack }: { children: React.ReactNode; 
             <Link href="/aa" className="hover:text-black transition">RBI Account Aggregator</Link>
           </div>
         </div>
+
+        {/* Regulatory & Educational Disclaimer */}
+        <div className="mx-auto max-w-4xl border-t border-[#f0f0f0] mt-4 pt-3 text-center">
+          <p className="text-[11px] text-[#737373] leading-relaxed">
+            FINNA provides financial insights, educational estimates based on city data, and cashflow intelligence. It does not provide regulated financial, credit, or investment advice.
+          </p>
+        </div>
       </footer>
 
       {/* Mobile Fixed 5-Tab Bar (< 768px) */}
       <MobileBottomTabs schemesCount={navSchemesCount} />
+
+      {/* Edit Details Modal */}
+      <CityOnboardingModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        isEditingDetails={true}
+      />
     </div>
   )
 }
@@ -202,6 +228,7 @@ function Pill({ children }: { children: React.ReactNode }) {
 
 export function ConsentPage() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false)
 
   useEffect(() => {
     async function checkAuth() {
@@ -238,12 +265,13 @@ export function ConsentPage() {
             >
               Review and give consent <ArrowRight className="size-4 transition group-hover:translate-x-1" />
             </Link>
-            <Link
-              href="/dashboard"
+            <button
+              type="button"
+              onClick={() => setIsOnboardingOpen(true)}
               className="rounded-full border border-[#e5e5e5] px-5 py-3.5 text-sm text-[#737373] hover:text-black hover:bg-[#f5f5f5] transition cursor-pointer"
             >
               Not now
-            </Link>
+            </button>
           </div>
           <div className="mt-6 flex flex-wrap items-center gap-2.5 pt-4 border-t border-[#e5e5e5]">
             <span className="text-xs text-[#737373]">Direct Explore:</span>
@@ -305,6 +333,12 @@ export function ConsentPage() {
       <div className="mx-auto mt-14 flex max-w-5xl items-center gap-3 text-xs text-[#737373]">
         <CircleHelp className="size-4" /> You can revoke this consent anytime from your Account Aggregator portal.
       </div>
+
+      <CityOnboardingModal
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+        isEditingDetails={false}
+      />
     </Shell>
   )
 }
@@ -318,13 +352,19 @@ export function DashboardPage() {
   const [userName, setUserName] = useState<string>("Arun")
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isEstimateMode, setIsEstimateMode] = useState(false)
+  const [estimatedCity, setEstimatedCity] = useState("")
+  const [estimatedMonthlyIncome, setEstimatedMonthlyIncome] = useState<number | null>(null)
 
   const loadDashboard = useCallback(async () => {
-    // Gate dashboard until Account Aggregator is completed
+    // Gate dashboard until Account Aggregator is completed OR user completed Estimate onboarding
     const hasConsent = typeof window !== "undefined" && (
       localStorage.getItem("finna_active_aa_consent") !== null ||
       localStorage.getItem("finna_aa_complete") === "true" ||
-      document.cookie.includes("finna_aa_complete=true")
+      document.cookie.includes("finna_aa_complete=true") ||
+      localStorage.getItem("finna_estimate_mode") === "true" ||
+      localStorage.getItem("finna_estimate_profile") !== null ||
+      document.cookie.includes("finna_estimate_mode=true")
     )
 
     if (!hasConsent) {
@@ -391,6 +431,22 @@ export function DashboardPage() {
           setSchemesCount(eligible.length)
         }
       }
+
+      // Check for estimate profile and stored user display name
+      const estActive = isEstimateModeActive()
+      setIsEstimateMode(estActive)
+      if (estActive) {
+        const estProf = getEstimatedFinancialProfile()
+        if (estProf) {
+          setEstimatedCity(estProf.inputs.city)
+          setEstimatedMonthlyIncome(Math.round(estProf.monthly_income.expected))
+        }
+      }
+
+      const storedDisplayName = getUserDisplayName()
+      if (storedDisplayName) {
+        setUserName(storedDisplayName.split(" ")[0])
+      }
     } catch (err: any) {
       console.error("Dashboard data load error:", err)
       setError(err.message)
@@ -424,17 +480,40 @@ export function DashboardPage() {
         <div className="flex flex-col justify-between gap-6 md:flex-row md:items-end">
           <div>
             <Pill>
-              <ShieldCheck className="size-3.5" /> Connected securely
+              {isEstimateMode ? (
+                <>
+                  <Sparkles className="size-3.5 text-black" />
+                  <span>Estimated Mode ({estimatedCity || "City Data"})</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="size-3.5" />
+                  <span>Connected securely</span>
+                </>
+              )}
             </Pill>
             <h1 className="mt-5 text-4xl font-medium tracking-[-.05em] md:text-6xl text-black">
               Good morning, {userName}.
             </h1>
-            <p className="mt-3 text-sm text-[#737373]">Here is your financial picture, in one clear view.</p>
+            <p className="mt-3 text-sm text-[#737373]">
+              {isEstimateMode
+                ? `Here are your estimated finances for ${estimatedCity || "your city"}.`
+                : "Here is your financial picture, in one clear view."}
+            </p>
           </div>
           <button className="flex items-center gap-2 self-start rounded-full border border-[#e5e5e5] bg-white px-4 py-2.5 text-sm text-black hover:bg-[#f5f5f5] transition cursor-pointer">
             This month <ChevronDown className="size-4" />
           </button>
         </div>
+
+        {/* Estimated Financial Profile Section (when in estimate mode) */}
+        <EstimatedProfileCard
+          onOpenEditModal={() => {
+            if (typeof window !== "undefined") {
+              window.dispatchEvent(new CustomEvent("finna_open_edit_details"))
+            }
+          }}
+        />
 
         {/* 3 Core Pillars: Bank Data, Financial Health, Welfare Schemes */}
         <div className="mt-10 grid gap-5 md:grid-cols-3">
@@ -442,9 +521,19 @@ export function DashboardPage() {
           <div className="rounded-3xl bg-black p-6 text-white flex flex-col justify-between shadow-sm min-h-[220px]">
             <div>
               <div className="flex items-center justify-between">
-                <p className="text-xs text-[#a3a3a3]">Total balance</p>
+                <p className="text-xs text-[#a3a3a3]">
+                  {isEstimateMode && accounts.length === 0 ? "Estimated monthly income" : "Total balance"}
+                </p>
                 <span className="flex items-center gap-1 text-[11px] font-mono text-[#a3a3a3] bg-[#262626] px-2 py-0.5 rounded">
-                  <Landmark className="size-3" /> AA Synced
+                  {isEstimateMode && accounts.length === 0 ? (
+                    <>
+                      <Sparkles className="size-3 text-emerald-400" /> City Estimate
+                    </>
+                  ) : (
+                    <>
+                      <Landmark className="size-3" /> AA Synced
+                    </>
+                  )}
                 </span>
               </div>
               {loading ? (
@@ -455,19 +544,27 @@ export function DashboardPage() {
               ) : (
                 <>
                   <p className="mt-3 text-4xl font-medium tracking-[-.04em]">
-                    {accounts.length > 0 ? formatINR(totalBalance) : "₹42,680"}
+                    {accounts.length > 0
+                      ? formatINR(totalBalance)
+                      : estimatedMonthlyIncome
+                      ? formatINR(estimatedMonthlyIncome)
+                      : "₹42,680"}
                   </p>
                   <p className="mt-3 text-xs text-[#a3a3a3]">
-                    {primaryAccount ? `${primaryAccount.bank_name} (${primaryAccount.masked_account})` : "State Bank of India · Synced"}
+                    {primaryAccount
+                      ? `${primaryAccount.bank_name} (${primaryAccount.masked_account})`
+                      : isEstimateMode
+                      ? `Based on city data for ${estimatedCity || "your city"} · Bank unlinked`
+                      : "State Bank of India · Synced"}
                   </p>
                 </>
               )}
             </div>
             <Link
-              href="/aa"
+              href={isEstimateMode && accounts.length === 0 ? "/aa?new=true" : "/aa"}
               className="mt-6 inline-flex items-center gap-1.5 text-xs text-[#a3a3a3] hover:text-white transition group"
             >
-              <span>Manage Bank Sync (AA)</span>
+              <span>{isEstimateMode && accounts.length === 0 ? "Connect Bank Sync (AA)" : "Manage Bank Sync (AA)"}</span>
               <ArrowRight className="size-3 transition group-hover:translate-x-1" />
             </Link>
           </div>

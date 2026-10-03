@@ -62,6 +62,8 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  const isEstimateMode = request.cookies.get("finna_estimate_mode")?.value === "true"
+
   // Other pages that require completing the Account Aggregator first
   const isAAGatedPath = [
     "/dashboard",
@@ -79,6 +81,10 @@ export async function middleware(request: NextRequest) {
   ].some((path) => pathname === path || pathname.startsWith(`${path}/`))
 
   if (isProtectedPath && !user) {
+    // If user has completed estimation onboarding, allow viewing dashboard / insights / schemes / health-score
+    if (isEstimateMode && isAAGatedPath) {
+      return supabaseResponse
+    }
     // If not authenticated, redirect to /login
     const url = request.nextUrl.clone()
     url.pathname = "/login"
@@ -89,6 +95,9 @@ export async function middleware(request: NextRequest) {
 
   // If user is authenticated and trying to access other pages, ensure AA is finished
   if (isAAGatedPath && user) {
+    if (isEstimateMode) {
+      return supabaseResponse
+    }
     const hasAACookie = request.cookies.get("finna_aa_complete")?.value === "true"
 
     if (!hasAACookie) {

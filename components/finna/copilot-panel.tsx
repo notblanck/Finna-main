@@ -233,10 +233,40 @@ export function CopilotPanel() {
   ])
 
   const [messages, setMessages] = React.useState<Message[]>([])
+  const [userName, setUserName] = React.useState<string>("")
+  const [cityName, setCityName] = React.useState<string>("")
+  const [isEstimateMode, setIsEstimateMode] = React.useState<boolean>(false)
 
   const scrollRef = React.useRef<HTMLDivElement>(null)
   const recognitionRef = React.useRef<any>(null)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
+
+  // Load User and Estimate details
+  React.useEffect(() => {
+    function loadUserDetails() {
+      if (typeof window !== "undefined") {
+        try {
+          const storedUser = localStorage.getItem("finna_user")
+          if (storedUser) {
+            const parsed = JSON.parse(storedUser)
+            const n = parsed.name || parsed.full_name
+            if (n) setUserName(n.trim().split(" ")[0])
+            if (parsed.city) setCityName(parsed.city)
+          }
+          const hasEstimate = localStorage.getItem("finna_estimate_mode") === "true" || localStorage.getItem("finna_estimate_profile") !== null
+          const hasAA = localStorage.getItem("finna_aa_complete") === "true" || localStorage.getItem("finna_active_aa_consent") !== null
+          setIsEstimateMode(hasEstimate && !hasAA)
+        } catch {}
+      }
+    }
+    loadUserDetails()
+    window.addEventListener("finna_data_updated", loadUserDetails)
+    window.addEventListener("finna_profile_updated", loadUserDetails)
+    return () => {
+      window.removeEventListener("finna_data_updated", loadUserDetails)
+      window.removeEventListener("finna_profile_updated", loadUserDetails)
+    }
+  }, [])
 
   // Initialize Speech Recognition capability check
   React.useEffect(() => {
@@ -800,17 +830,27 @@ export function CopilotPanel() {
 
                     <div className="space-y-1.5 max-w-sm">
                       <h3 className="text-base sm:text-lg font-bold text-black dark:text-white tracking-tight">
-                        {GREETING_TEXT[language].title}
+                        {userName
+                          ? language === "hi"
+                            ? `नमस्ते ${userName}, मैं FINNA हूँ।`
+                            : language === "ta"
+                            ? `வணக்கம் ${userName}, நான் FINNA.`
+                            : `Hey ${userName}, I'm FINNA.`
+                          : GREETING_TEXT[language].title}
                       </h3>
                       <p className="text-xs text-[#737373] dark:text-[#a3a3a3] leading-relaxed">
                         {GREETING_TEXT[language].desc}
                       </p>
                     </div>
 
-                    {/* Grounded in RBI AA Statement Badge */}
+                    {/* Grounded Statement Badge */}
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#f5f5f5] dark:bg-[#1c1c1c] border border-[#e5e5e5] dark:border-[#2e2e2e] text-[11px] text-[#525252] dark:text-[#a3a3a3]">
                       <ShieldCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-                      <span>{GREETING_TEXT[language].badge}</span>
+                      <span>
+                        {isEstimateMode
+                          ? `Based on estimates for ${cityName || "your city"} and gig telemetry`
+                          : GREETING_TEXT[language].badge}
+                      </span>
                     </div>
 
                     {/* 4 Outlined Suggestion Chips */}
